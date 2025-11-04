@@ -51,14 +51,14 @@ CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
 ### 2. Simple CLI Usage
 
 ```bash
-# Ask a simple question
+# Ask a simple question (uses orchestrated mode by default)
 agentic-data-scientist "What is quantum computing?"
 
 # Analyze a file
 agentic-data-scientist "Analyze this data" --files data.csv
 
-# Use Claude Code agent for coding tasks
-agentic-data-scientist "Write a Python script to parse CSV" --agent claude_code
+# Use simple mode (direct Claude Code without orchestration)
+agentic-data-scientist "Write a Python script to parse CSV" --mode simple
 
 # Stream responses for real-time output
 agentic-data-scientist "Complex analysis task" --stream

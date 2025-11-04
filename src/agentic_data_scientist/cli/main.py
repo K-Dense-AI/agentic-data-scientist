@@ -26,22 +26,23 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('query', required=False)
 @click.option('--files', '-f', multiple=True, help='Files to include in the query')
-@click.option('--agent', default='adk', type=click.Choice(['adk', 'claude_code']), help='Agent type to use')
-@click.option('--model', help='Model to use for the agent')
+@click.option('--mode', default='orchestrated', type=click.Choice(['orchestrated', 'simple']), 
+              help='Execution mode: "orchestrated" (default, with planning) or "simple" (direct Claude Code)')
 @click.option('--stream/--no-stream', default=False, help='Stream responses in real-time')
-@click.option('--mcp-servers', multiple=True, help='MCP servers to enable (filesystem, git, fetch, context7)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
 def main(
     query: Optional[str],
     files: tuple,
-    agent: str,
-    model: Optional[str],
+    mode: str,
     stream: bool,
-    mcp_servers: tuple,
     verbose: bool,
 ):
     """
-    Run Agentic Data Scientist agent with a query.
+    Run Agentic Data Scientist with a query.
+
+    MODE:
+        orchestrated (default): Full multi-agent system with planning, verification, and Claude Code implementation
+        simple: Direct Claude Code execution without orchestration
 
     Examples:
 
@@ -49,9 +50,7 @@ def main(
 
         agentic-data-scientist "Analyze this data" --files data.csv
 
-        agentic-data-scientist "Complex task" --agent claude_code --stream
-
-        agentic-data-scientist "Use git tools" --mcp-servers git --mcp-servers filesystem
+        agentic-data-scientist "Write a Python script" --mode simple --stream
     """
     # Set logging level
     if verbose:
@@ -74,13 +73,12 @@ def main(
         else:
             click.echo(f"Warning: File not found: {f}", err=True)
 
+    # Map mode to agent_type
+    agent_type = "adk" if mode == "orchestrated" else "claude_code"
+
     # Create core instance
     try:
-        core = DataScientist(
-            agent_type=agent,
-            model=model,
-            mcp_servers=list(mcp_servers) if mcp_servers else None,
-        )
+        core = DataScientist(agent_type=agent_type)
     except Exception as e:
         click.echo(f"Error initializing Agentic Data Scientist: {e}", err=True)
         sys.exit(1)

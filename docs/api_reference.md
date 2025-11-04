@@ -271,29 +271,31 @@ agentic-data-scientist [OPTIONS] QUERY
 
 ### Options
 
-- **--agent, -a**: Agent type (`adk` or `claude_code`), default: `adk`
+- **--mode**: Execution mode, default: `orchestrated`
+  - `orchestrated`: Full multi-agent system with planning and verification
+  - `simple`: Direct Claude Code execution
 - **--files, -f**: Files to upload (can be specified multiple times)
 - **--stream**: Enable streaming output
-- **--model, -m**: Specific model to use
+- **--verbose, -v**: Enable verbose logging
 - **--help**: Show help message
 
 ### Examples
 
 ```bash
-# Simple query
+# Simple query (orchestrated mode by default)
 agentic-data-scientist "What is Python?"
 
 # With file upload
 agentic-data-scientist "Analyze this data" --files data.csv
 
-# Use Claude Code
-agentic-data-scientist "Write a script" --agent claude_code
+# Use simple mode (direct Claude Code)
+agentic-data-scientist "Write a script" --mode simple
 
 # Stream output
 agentic-data-scientist "Complex task" --stream
 
-# Custom model
-agentic-data-scientist "Query" --model claude-sonnet-4-5-latest
+# Verbose logging
+agentic-data-scientist "Debug this" --verbose
 ```
 
 ## Environment Variables

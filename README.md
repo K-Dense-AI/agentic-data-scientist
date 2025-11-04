@@ -32,16 +32,16 @@ uvx agentic-data-scientist "your query here"
 #### CLI
 
 ```bash
-# Simple query
+# Simple query (uses orchestrated mode by default)
 agentic-data-scientist "Explain quantum computing"
 
 # With file upload
 agentic-data-scientist "Analyze this data" --files data.csv
 
-# Use Claude Code agent
-agentic-data-scientist "Write a Python script" --agent claude_code
+# Simple mode (direct Claude Code without orchestration)
+agentic-data-scientist "Write a Python script" --mode simple
 
-# Stream responses
+# Stream responses in real-time
 agentic-data-scientist "Complex analysis" --stream
 ```
 
