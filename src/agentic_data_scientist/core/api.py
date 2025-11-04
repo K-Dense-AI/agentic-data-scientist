@@ -140,17 +140,17 @@ class DataScientist:
 
         # Create session service and pre-create the session
         self.session_service = InMemorySessionService()
-        
+
         # Pre-create the session so it exists when runner tries to use it
         session = await self.session_service.create_session(
             app_name="agentic_data_scientist",
             user_id="default_user",
             session_id=self.session_id,
         )
-        
+
         # Store session for later state initialization
         self.session = session
-        
+
         self.runner = Runner(
             agent=self.agent,
             app_name="agentic_data_scientist",
@@ -268,22 +268,20 @@ class DataScientist:
         try:
             # Set up agent if not already done
             await self._setup_agent()
-            
+
             # Initialize session state EARLY before any agent execution
             # Get the session from session_service to ensure we're modifying the right instance
             session = await self.session_service.get_session(
-                app_name="agentic_data_scientist",
-                user_id="default_user",
-                session_id=self.session_id
+                app_name="agentic_data_scientist", user_id="default_user", session_id=self.session_id
             )
-            
+
             # Set state variables (state is mutable, changes persist automatically)
             session.state["original_user_input"] = message
             session.state["latest_user_input"] = message
             # For Claude Code agent, also set implementation_task
             if self.config.agent_type == "claude_code":
                 session.state["implementation_task"] = message
-            
+
             logger.info(f"[API] Set session state keys: {list(session.state.keys())}")
             logger.info(f"[API] implementation_task = {session.state.get('implementation_task', 'NOT SET')[:50]}...")
 
@@ -324,7 +322,7 @@ class DataScientist:
             }
             if self.config.agent_type == "claude_code":
                 initial_state["implementation_task"] = prompt
-            
+
             async for event in self.runner.run_async(
                 user_id="default_user",
                 session_id=self.session_id,
@@ -444,7 +442,7 @@ class DataScientist:
             }
             if self.config.agent_type == "claude_code":
                 initial_state["implementation_task"] = prompt
-            
+
             async for event in self.runner.run_async(
                 user_id="default_user",
                 session_id=self.session_id,

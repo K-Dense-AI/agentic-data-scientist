@@ -210,12 +210,12 @@ class ClaudeCodeAgent(Agent):
             else:
                 # Try multiple state keys to find the task
                 task_prompt = (
-                    implementation_task 
-                    or state.get("original_user_input", "") 
+                    implementation_task
+                    or state.get("original_user_input", "")
                     or state.get("latest_user_input", "")
                     or state.get("user_message", "")
                 )
-                
+
                 # Also check if there's a message in the context's initial message
                 if not task_prompt and hasattr(ctx, 'initial_message'):
                     initial_msg = ctx.initial_message
@@ -224,7 +224,7 @@ class ClaudeCodeAgent(Agent):
                             if hasattr(part, 'text'):
                                 task_prompt = part.text
                                 break
-                
+
                 if not task_prompt:
                     error_msg = "No implementation task or plan found in state."
                     logger.warning(f"[{self.name}] {error_msg}. Available state keys: {list(state.keys())}")
@@ -253,6 +253,16 @@ Requirements:
             env = os.environ.copy()
             env["ANTHROPIC_MODEL"] = self._model
 
+            # Configure MCP servers for Claude Agent SDK
+            # Use hosted claude-scientific-skills MCP server
+            mcp_url = os.getenv("CLAUDE_SCIENTIFIC_SKILLS_URL", "https://mcp.k-dense.ai/claude-scientific-skills/mcp")
+
+            mcp_servers = {
+                "claude-scientific-skills": {
+                    "url": mcp_url,
+                }
+            }
+
             # Create options for Claude Agent SDK
             options = ClaudeAgentOptions(
                 cwd=working_dir,
@@ -261,6 +271,7 @@ Requirements:
                 env=env,
                 system_prompt={"type": "preset", "preset": "claude_code", "append": system_instructions},
                 setting_sources=["project", "local"],
+                mcp_servers=mcp_servers,
             )
 
             yield Event(
@@ -408,10 +419,14 @@ Requirements:
                                     combined_text = '\n'.join(text_parts) if text_parts else ''
                                     if is_error:
                                         response_data = {'error': combined_text}
-                                        logger.info(f"[ToolResultBlock] ERROR for {tool_name}: {combined_text[:200]}...")
+                                        logger.info(
+                                            f"[ToolResultBlock] ERROR for {tool_name}: {combined_text[:200]}..."
+                                        )
                                     else:
                                         response_data = {'output': combined_text}
-                                        logger.info(f"[ToolResultBlock] SUCCESS for {tool_name}: {combined_text[:200]}...")
+                                        logger.info(
+                                            f"[ToolResultBlock] SUCCESS for {tool_name}: {combined_text[:200]}..."
+                                        )
                                 elif isinstance(content, str):
                                     if is_error:
                                         response_data = {'error': content}
@@ -425,7 +440,9 @@ Requirements:
                                         response_data = {'error': content_str}
                                     else:
                                         response_data = {'output': content_str}
-                                    logger.info(f"[ToolResultBlock] {tool_name} (converted to str): {content_str[:200]}...")
+                                    logger.info(
+                                        f"[ToolResultBlock] {tool_name} (converted to str): {content_str[:200]}..."
+                                    )
 
                                 # Convert to Google GenAI function response format
                                 # This will be parsed as FunctionResponseEvent downstream

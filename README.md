@@ -48,36 +48,36 @@ agentic-data-scientist "Complex analysis" --stream
 #### Python API
 
 ```python
-from agentic-data-scientist import Agentic Data ScientistCore
+from agentic_data_scientist import DataScientist
 
 # Simple usage
-core = Agentic Data ScientistCore()
-result = core.run("What is machine learning?")
-print(result.response)
+with DataScientist() as ds:
+    result = ds.run("What is machine learning?")
+    print(result.response)
 
 # With streaming
 async def analyze():
-    core = Agentic Data ScientistCore(agent_type="adk")
-    async for event in await core.run_async(
-        "Analyze this dataset",
-        files=[("data.csv", open("data.csv", "rb").read())],
-        stream=True
-    ):
-        if event['type'] == 'message':
-            print(f"[{event['author']}] {event['content']}")
+    async with DataScientist(agent_type="adk") as ds:
+        async for event in await ds.run_async(
+            "Analyze this dataset",
+            files=[("data.csv", open("data.csv", "rb").read())],
+            stream=True
+        ):
+            if event['type'] == 'message':
+                print(f"[{event['author']}] {event['content']}")
 
 # Multi-turn conversation
 import asyncio
 
 async def chat():
-    core = Agentic Data ScientistCore()
-    context = {}
-    
-    # First turn
-    result1 = await core.run_async("What is Python?", context=context)
-    
-    # Second turn (maintains context)
-    result2 = await core.run_async("Give me an example", context=context)
+    async with DataScientist() as ds:
+        context = {}
+        
+        # First turn
+        result1 = await ds.run_async("What is Python?", context=context)
+        
+        # Second turn (maintains context)
+        result2 = await ds.run_async("Give me an example", context=context)
 
 asyncio.run(chat())
 ```
@@ -87,36 +87,42 @@ asyncio.run(chat())
 Agentic Data Scientist uses a layered architecture:
 
 ```
-┌─────────────────────────────────────┐
-│         CLI / Python API            │
-├─────────────────────────────────────┤
-│         Agentic Data Scientist Core            │
-│   (Session & Event Management)      │
-├─────────────────────────────────────┤
-│           Agent Layer               │
-│   ┌──────────┬──────────────────┐  │
-│   │   ADK    │   Claude Code    │  │
-│   │  Agent   │   CLI Agent      │  │
-│   └──────────┴──────────────────┘  │
-├─────────────────────────────────────┤
-│          MCP Tool Layer             │
-│  (filesystem, git, fetch, context7) │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│          CLI / Python API                │
+├──────────────────────────────────────────┤
+│      Agentic Data Scientist Core         │
+│    (Session & Event Management)          │
+├──────────────────────────────────────────┤
+│            Agent Layer                   │
+│  ┌────────────────────────────────────┐ │
+│  │  ADK Orchestration (Planning +     │ │
+│  │  Verification + Implementation)    │ │
+│  │    └─> Claude Code (Implementation)│ │
+│  │                                    │ │
+│  │  Or: Claude Code Direct            │ │
+│  └────────────────────────────────────┘ │
+├──────────────────────────────────────────┤
+│           MCP Tool Layer                 │
+│  • filesystem (read-only for ADK)        │
+│  • fetch                                 │
+│  • claude-scientific-skills (hosted)     │
+└──────────────────────────────────────────┘
 ```
 
 ### Agent Types
 
-**ADK Agent**
-- Multi-agent orchestration
-- Planning and verification
-- Iterative implementation
-- Best for: Complex multi-step tasks
+**ADK Agent** (`agent_type="adk"`)
+- Multi-agent orchestration with planning and verification
+- Uses Claude Code for implementation tasks
+- Access to MCP tools: filesystem (read-only), fetch, claude-scientific-skills
+- Best for: Complex multi-step tasks requiring planning
 
-**Claude Code CLI Agent**
-- Direct Claude integration
-- Code-focused tasks
-- Streaming execution
-- Best for: Coding and scripting
+**Claude Code Agent** (`agent_type="claude_code"`)
+- Direct Claude Sonnet 4.5 integration
+- Code execution and development capabilities
+- Access to claude-scientific-skills MCP via Claude Agent SDK
+- Streaming execution support
+- Best for: Direct coding, scripting, and development tasks
 
 ## Configuration
 
@@ -134,20 +140,21 @@ DEFAULT_MODEL=google/gemini-2.5-pro
 CODING_MODEL=claude-sonnet-4-5-latest
 
 # Optional: MCP server configuration
-MCP_FILESYSTEM_ROOT=/tmp
-MCP_GIT_ENABLED=true
-MCP_FETCH_ENABLED=true
-MCP_CONTEXT7_ENABLED=true
+MCP_FILESYSTEM_ROOT=/path/to/your/data
+CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
 ```
 
 ### MCP Servers
 
 Agentic Data Scientist uses Model Context Protocol (MCP) servers for tool access:
 
-- **filesystem**: Local file operations
-- **git**: Git repository operations
-- **fetch**: Web content fetching
-- **context7**: Documentation access
+- **filesystem**: Read-only file operations (for ADK agents)
+  - Allowed: read_file, list_directory, search_files, get_file_info
+  - Blocked: write_file, delete_file, edit_file (for security)
+- **fetch**: Web content fetching and HTTP requests
+- **claude-scientific-skills**: Hosted scientific computing tools
+  - URL: https://mcp.k-dense.ai/claude-scientific-skills/mcp
+  - Available to both ADK and Claude Code agents
 
 See [docs/mcp_configuration.md](docs/mcp_configuration.md) for detailed configuration.
 
@@ -160,12 +167,41 @@ See [docs/mcp_configuration.md](docs/mcp_configuration.md) for detailed configur
 
 ## Examples
 
-See the [examples/](examples/) directory for:
-- Basic usage
-- Streaming responses
-- Multi-turn conversations
-- File handling
-- Custom configurations
+The [examples/](examples/) directory contains practical, working examples:
+
+### Quick Examples
+
+**Basic Usage** (`examples/basic_usage.py`)
+```python
+from agentic_data_scientist import DataScientist
+
+with DataScientist(agent_type="adk") as ds:
+    result = ds.run("What is machine learning?")
+    print(result.response)
+```
+
+**Streaming** (`examples/streaming_example.py`)
+```python
+async with DataScientist(agent_type="adk") as ds:
+    async for event in await ds.run_async("Complex task", stream=True):
+        if event['type'] == 'message':
+            print(f"[{event['author']}] {event['content']}")
+```
+
+**Multi-turn Conversation** (`examples/multi_turn_conversation.py`)
+```python
+async with DataScientist() as ds:
+    context = {}
+    result1 = await ds.run_async("What is Python?", context=context)
+    result2 = await ds.run_async("Give me an example", context=context)
+```
+
+Run any example with:
+```bash
+uv run python examples/basic_usage.py
+```
+
+See [examples/README.md](examples/README.md) for detailed information.
 
 ## Development
 
@@ -173,37 +209,39 @@ See the [examples/](examples/) directory for:
 
 ```bash
 # Clone repository
-git clone https://github.com/K-Dense-AI/agentic-data-scientist-core.git
-cd agentic-data-scientist-core
+git clone https://github.com/K-Dense-AI/agentic-data-scientist.git
+cd agentic-data-scientist
 
-# Install with dev dependencies
-pip install -e ".[dev]"
+# Install with dev dependencies using uv
+uv sync --extra dev
 
 # Run tests
-pytest tests/
+uv run pytest tests/
 
 # Format code
-ruff format .
+uv run ruff format .
 
 # Lint
-ruff check --fix .
+uv run ruff check --fix .
 ```
 
 ### Project Structure
 
 ```
 agentic-data-scientist/
-├── src/agentic-data-scientist/
+├── src/agentic_data_scientist/
 │   ├── core/           # Core API and session management
 │   ├── agents/         # Agent implementations
-│   │   ├── adk/        # ADK agent system
-│   │   └── claude_code/# Claude Code CLI agent
+│   │   ├── adk/        # ADK agent system (orchestration + planning)
+│   │   └── claude_code/# Claude Code agent (implementation)
 │   ├── prompts/        # Prompt templates
 │   │   ├── base/       # General prompts
 │   │   └── domain/     # Domain-specific prompts
-│   ├── mcp/            # MCP integration
+│   ├── mcp/            # MCP integration (filesystem, fetch, claude-scientific-skills)
 │   └── cli/            # CLI interface
 ├── tests/              # Test suite
+│   ├── unit/          # Unit tests
+│   └── integration/   # Integration tests
 ├── examples/           # Usage examples
 └── docs/               # Documentation
 ```
@@ -230,14 +268,14 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- GitHub Issues: [Report bugs or request features](https://github.com/K-Dense-AI/agentic-data-scientist-core/issues)
-- Documentation: [Full documentation](https://github.com/K-Dense-AI/agentic-data-scientist-core/blob/main/docs)
+- GitHub Issues: [Report bugs or request features](https://github.com/K-Dense-AI/agentic-data-scientist/issues)
+- Documentation: [Full documentation](https://github.com/K-Dense-AI/agentic-data-scientist/blob/main/docs)
 
 ## Acknowledgments
 
 Built with:
-- [Google Agent Development Kit (ADK)](https://github.com/google/adk)
-- [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)
+- [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/)
+- [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 
 ---

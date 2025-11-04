@@ -1,8 +1,12 @@
+#!/usr/bin/env python
 """
 Streaming example for Agentic Data Scientist.
 
 This example shows how to use Agentic Data Scientist with streaming to see
 real-time progress as the agent works.
+
+Usage:
+    uv run python examples/streaming_example.py
 """
 
 import asyncio
@@ -13,21 +17,16 @@ from agentic_data_scientist import DataScientist
 async def main():
     """Run a query with streaming enabled."""
 
-    # Create an Agentic Data Scientist instance
-    core = DataScientist(
-        agent_type="adk",
-        model="google/gemini-2.5-pro",
-    )
+    # Use async context manager for automatic cleanup
+    async with DataScientist(agent_type="adk") as ds:
+        # Run a query with streaming
+        query = "Write a Python function to calculate fibonacci numbers and explain how it works."
 
-    # Run a query with streaming
-    query = "Write a Python function to calculate fibonacci numbers and explain how it works."
+        print("Running query with streaming:", query)
+        print("=" * 60 + "\n")
 
-    print("Running query with streaming:", query)
-    print("=" * 60 + "\n")
-
-    try:
         # Execute with streaming (asynchronous)
-        async for event in await core.run_async(query, stream=True):
+        async for event in await ds.run_async(query, stream=True):
             event_type = event.get('type')
 
             if event_type == 'message':
@@ -57,10 +56,6 @@ async def main():
             elif event_type == 'error':
                 error_content = event.get('content', 'Unknown error')
                 print(f"\n[ERROR] {error_content}")
-
-    finally:
-        # Cleanup
-        core.cleanup()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "HNX AI Team"}
+    {name = "K-Dense AI", email="contact@k-dense.ai"}
 ]
 keywords = ["ai", "agents", "adk", "claude", "multi-agent", "llm", "data-science"]
 classifiers = [
@@ -37,12 +37,6 @@ dev = [
 
 [project.scripts]
 agentic-data-scientist = "agentic_data_scientist.cli.main:main"
-
-[project.urls]
-Homepage = "https://github.com/HNX-AI/agentic-data-scientist"
-Documentation = "https://github.com/HNX-AI/agentic-data-scientist/blob/main/docs"
-Repository = "https://github.com/HNX-AI/agentic-data-scientist"
-Issues = "https://github.com/HNX-AI/agentic-data-scientist/issues"
 
 [build-system]
 requires = ["hatchling"]

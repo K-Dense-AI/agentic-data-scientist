@@ -91,33 +91,20 @@ def create_agent(
 
     logger.info(f"[AgenticDS] Creating ADK agent with working_dir={working_dir}")
 
-    # Get MCP tools
-    from agentic_data_scientist.mcp import get_mcp_tools
+    # Get MCP toolsets using ADK's MCPToolset
+    from agentic_data_scientist.mcp import get_mcp_toolsets
 
-    if mcp_servers is None:
-        mcp_servers = ["filesystem", "git", "fetch", "context7"]
-
-    # Get tools from MCP servers
-    tools = []
+    # Get toolsets (MCPToolset handles connection management automatically)
+    mcp_toolsets = []
     try:
-        import asyncio
-        
-        # Check if we're already in an event loop
-        try:
-            loop = asyncio.get_running_loop()
-            # We're in an async context, so we need to use a different approach
-            # For now, skip MCP tools in async contexts (they can be added later)
-            logger.warning("[AgenticDS] Skipping MCP tools - already in async context")
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run()
-            tools = asyncio.run(get_mcp_tools(mcp_servers))
-            logger.info(f"[AgenticDS] Loaded {len(tools)} tools from MCP servers")
+        mcp_toolsets = get_mcp_toolsets(working_dir=str(working_dir))
+        logger.info(f"[AgenticDS] Configured {len(mcp_toolsets)} MCP toolsets")
     except Exception as e:
-        logger.warning(f"[AgenticDS] Failed to load MCP tools: {e}")
+        logger.warning(f"[AgenticDS] Failed to configure MCP toolsets: {e}")
 
     # ------------------------- Implementation Loop -------------------------
 
-    coding_agent, review_agent = make_implementation_agents(str(working_dir), tools)
+    coding_agent, review_agent = make_implementation_agents(str(working_dir), mcp_toolsets)
 
     # LoopAgent wrapper for implementation
     implementation_loop = NonEscalatingLoopAgent(
@@ -139,7 +126,7 @@ def create_agent(
         model=model or DEFAULT_MODEL,
         description="Orchestrates the implementation of multi-step plans.",
         instruction=plan_orchestrator_instructions,
-        tools=tools + [exit_loop_simple],
+        tools=mcp_toolsets + [exit_loop_simple],
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -169,7 +156,7 @@ def create_agent(
         model=REVIEW_MODEL,
         description="Verifies that implementation meets success criteria.",
         instruction=plan_verifier_instructions,
-        tools=tools + [exit_loop_simple],
+        tools=mcp_toolsets + [exit_loop_simple],
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -200,7 +187,7 @@ def create_agent(
         model=model or DEFAULT_MODEL,
         description="Summarizes results into a comprehensive report.",
         instruction=summary_agent_instructions,
-        tools=tools,
+        tools=mcp_toolsets,
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -222,7 +209,7 @@ def create_agent(
         model=model or DEFAULT_MODEL,
         description="Generates high-level plans for complex tasks.",
         instruction=plan_generator_instructions,
-        tools=tools,
+        tools=mcp_toolsets,
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -245,7 +232,7 @@ def create_agent(
         model=model or DEFAULT_MODEL,
         description="Agentic Data Scientist root agent - orchestrates the entire workflow.",
         instruction=root_instructions,
-        tools=tools,
+        tools=mcp_toolsets,
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,

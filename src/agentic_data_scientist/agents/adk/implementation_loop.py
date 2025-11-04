@@ -7,10 +7,8 @@ iterative loop to implement and verify solutions.
 
 import logging
 import os
-from typing import List
 
 from google.adk.planners import BuiltInPlanner
-from google.adk.tools import FunctionTool
 from google.adk.tools.tool_context import CallbackContext
 from google.genai import types
 
@@ -57,7 +55,7 @@ def trim_history_to_recent_events(callback_context: CallbackContext, max_events:
         logger.info(f"[DEBUG] After trimming: {len(events)} events remain")
 
 
-def make_implementation_agents(working_dir: str, tools: List[FunctionTool]):
+def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     """
     Create the implementation agents (coding + review).
 
@@ -65,60 +63,29 @@ def make_implementation_agents(working_dir: str, tools: List[FunctionTool]):
     ----------
     working_dir : str
         Working directory for the session
-    tools : List[Tool]
-        List of tools available to the coding agent
+    mcp_toolsets : list
+        List of MCPToolset instances available to agents
 
     Returns
     -------
     tuple
         (coding_agent, review_agent)
     """
-    logger.info(f"[AgenticDS] Initializing implementation agents with {len(tools)} tools")
+    logger.info(f"[AgenticDS] Initializing implementation agents with {len(mcp_toolsets)} MCP toolsets")
 
-    # Determine which coding agent to use
-    coding_agent_type = os.getenv("CODING_AGENT", "claude_code")
+    # Always use ClaudeCodeAgent for coding
+    from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
 
-    if coding_agent_type == "claude_code":
-        from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
+    model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-latest")
+    logger.info(f"[AgenticDS] Using ClaudeCodeAgent with model={model}")
 
-        model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-latest")
-        logger.info(f"[AgenticDS] Using ClaudeCodeAgent with model={model}")
-
-        coding_agent = ClaudeCodeAgent(
-            name="coding_agent",
-            description="A coding agent that uses Claude Code SDK to implement plans.",
-            working_dir=working_dir,
-            model=model,
-            output_key="implementation_summary",
-        )
-    elif coding_agent_type == "adk":
-        # Use ADK-based coding agent with MCP tools
-        logger.info(f"[AgenticDS] Using ADK coding agent with {len(tools)} MCP tools")
-
-        # Load coding prompt
-        coding_prompt = load_prompt("coding_base")
-
-        coding_agent = LoopDetectionAgent(
-            name="coding_agent",
-            description="A coding agent that implements plans using available tools.",
-            instruction=coding_prompt,
-            tools=tools,
-            planner=BuiltInPlanner(
-                thinking_config=types.ThinkingConfig(
-                    include_thoughts=True,
-                    thinking_budget=-1,
-                ),
-            ),
-            generate_content_config=get_generate_content_config(temperature=0.0),
-            output_key="implementation_summary",
-            # Loop detection settings
-            min_pattern_length=200,
-            max_pattern_length=1000,
-            repetition_threshold=5,
-            window_size=5000,
-        )
-    else:
-        raise ValueError(f"Unsupported CODING_AGENT: {coding_agent_type}")
+    coding_agent = ClaudeCodeAgent(
+        name="coding_agent",
+        description="A coding agent that uses Claude Code SDK to implement plans.",
+        working_dir=working_dir,
+        model=model,
+        output_key="implementation_summary",
+    )
 
     # Review Agent - Uses ADK with loop detection
     logger.info("[AgenticDS] Creating review agent")
