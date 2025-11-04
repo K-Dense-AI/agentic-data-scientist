@@ -1,14 +1,12 @@
 """Unit tests for event system."""
 
-import pytest
-from datetime import datetime
 from agentic_data_scientist.core.events import (
-    MessageEvent,
+    CompletedEvent,
+    ErrorEvent,
     FunctionCallEvent,
     FunctionResponseEvent,
+    MessageEvent,
     UsageEvent,
-    ErrorEvent,
-    CompletedEvent,
     event_to_dict,
 )
 
@@ -176,4 +174,3 @@ class TestEventToDict:
         assert event_dict["type"] == "completed"
         assert event_dict["session_id"] == "test"
         assert event_dict["duration"] == 1.0
-

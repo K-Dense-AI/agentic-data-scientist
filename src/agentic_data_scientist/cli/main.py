@@ -26,8 +26,12 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('query', required=False)
 @click.option('--files', '-f', multiple=True, help='Files to include in the query')
-@click.option('--mode', default='orchestrated', type=click.Choice(['orchestrated', 'simple']), 
-              help='Execution mode: "orchestrated" (default, with planning) or "simple" (direct Claude Code)')
+@click.option(
+    '--mode',
+    default='orchestrated',
+    type=click.Choice(['orchestrated', 'simple']),
+    help='Execution mode: "orchestrated" (default, with planning) or "simple" (direct Claude Code)',
+)
 @click.option('--stream/--no-stream', default=False, help='Stream responses in real-time')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
 def main(

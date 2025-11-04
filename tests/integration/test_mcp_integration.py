@@ -24,7 +24,7 @@ class TestMCPIntegration:
         mock_toolset = Mock()
         mock_toolset_class.return_value = mock_toolset
 
-        toolset = get_filesystem_toolset("/tmp")
+        toolset = get_filesystem_toolset("/tmp") # noqa: F841
 
         mock_toolset_class.assert_called_once()
         call_kwargs = mock_toolset_class.call_args[1]
@@ -36,7 +36,7 @@ class TestMCPIntegration:
         mock_toolset = Mock()
         mock_toolset_class.return_value = mock_toolset
 
-        toolset = get_fetch_toolset()
+        toolset = get_fetch_toolset() # noqa: F841
 
         mock_toolset_class.assert_called_once()
 
@@ -46,7 +46,7 @@ class TestMCPIntegration:
         mock_toolset = Mock()
         mock_toolset_class.return_value = mock_toolset
 
-        toolset = get_claude_scientific_skills_toolset()
+        toolset = get_claude_scientific_skills_toolset() # noqa: F841
 
         mock_toolset_class.assert_called_once()
         # Verify SSE connection params were created

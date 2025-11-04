@@ -1,13 +1,13 @@
 """Unit tests for MCP configuration and registry."""
 
-import pytest
 from unittest.mock import Mock, patch
+
 from agentic_data_scientist.mcp.config import (
     filesystem_tool_filter,
-    get_filesystem_toolset,
-    get_fetch_toolset,
     get_claude_scientific_skills_toolset,
     get_default_mcp_toolsets,
+    get_fetch_toolset,
+    get_filesystem_toolset,
 )
 
 
@@ -24,7 +24,7 @@ class TestFilesystemToolFilter:
             "get_file_info",
             "list_allowed_directories",
         ]
-        
+
         for tool_name in allowed_tools:
             tool = Mock()
             tool.name = tool_name
@@ -39,7 +39,7 @@ class TestFilesystemToolFilter:
             "delete_file",
             "edit_file",
         ]
-        
+
         for tool_name in denied_tools:
             tool = Mock()
             tool.name = tool_name
@@ -84,9 +84,9 @@ class TestMCPToolsetGetters:
         mock_fs.return_value = Mock()
         mock_fetch.return_value = Mock()
         mock_css.return_value = Mock()
-        
+
         toolsets = get_default_mcp_toolsets()
-        
+
         assert len(toolsets) == 3
         mock_fs.assert_called_once()
         mock_fetch.assert_called_once()
@@ -100,9 +100,8 @@ class TestMCPToolsetGetters:
         mock_fs.return_value = Mock()
         mock_fetch.return_value = Mock()
         mock_css.return_value = Mock()
-        
+
         toolsets = get_default_mcp_toolsets(working_dir="/custom/path")
-        
+
         assert len(toolsets) == 3
         mock_fs.assert_called_once_with("/custom/path")
-

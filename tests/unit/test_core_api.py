@@ -1,8 +1,10 @@
 """Unit tests for core API."""
 
-import pytest
 from pathlib import Path
-from agentic_data_scientist.core.api import DataScientist, SessionConfig, FileInfo, Result
+
+import pytest
+
+from agentic_data_scientist.core.api import DataScientist, FileInfo, Result, SessionConfig
 
 
 class TestSessionConfig:
@@ -100,12 +102,12 @@ class TestDataScientist:
         """Test saving files from bytes."""
         ds = DataScientist(agent_type="adk")
         ds.working_dir = tmp_path
-        
+
         content = b"Test content"
         files = [("test.txt", content)]
-        
+
         file_info_list = ds.save_files(files)
-        
+
         assert len(file_info_list) == 1
         assert file_info_list[0].name == "test.txt"
         assert Path(file_info_list[0].path).exists()
@@ -125,9 +127,9 @@ class TestDataScientist:
         ds = DataScientist(agent_type="adk")
         message = "Analyze these files"
         file_info = [FileInfo(name="data.csv", path="/tmp/data.csv", size_kb=10.5)]
-        
+
         prompt = ds.prepare_prompt(message, file_info)
-        
+
         assert "Analyze these files" in prompt
         assert "data.csv" in prompt
         assert "10.5 KB" in prompt
@@ -138,7 +140,7 @@ class TestDataScientist:
         """Test DataScientist as context manager."""
         with DataScientist(agent_type="adk") as ds:
             assert ds.working_dir.exists()
-        
+
         # Cleanup should have been called
         # Note: cleanup is best-effort, directory may still exist
 
@@ -147,6 +149,5 @@ class TestDataScientist:
         """Test DataScientist as async context manager."""
         async with DataScientist(agent_type="adk") as ds:
             assert ds.working_dir.exists()
-        
-        # Cleanup should have been called
 
+        # Cleanup should have been called

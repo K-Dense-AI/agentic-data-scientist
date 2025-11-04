@@ -52,7 +52,7 @@ class TestADKWorkflow:
         mock_get_toolsets.return_value = [mock_toolset]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            agent = create_agent(working_dir=tmpdir)
+            agent = create_agent(working_dir=tmpdir) # noqa: F841
 
             # Verify get_mcp_toolsets was called
             mock_get_toolsets.assert_called_once()

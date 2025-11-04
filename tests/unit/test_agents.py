@@ -1,8 +1,8 @@
 """Unit tests for agent implementations."""
 
-import pytest
 import tempfile
 from pathlib import Path
+
 from agentic_data_scientist.agents.claude_code.agent import ClaudeCodeAgent, setup_working_directory
 
 
@@ -56,7 +56,7 @@ class TestSetupWorkingDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             working_dir = Path(tmpdir) / "test_session"
             setup_working_directory(str(working_dir))
-            
+
             assert working_dir.exists()
             assert (working_dir / "user_data").exists()
             assert (working_dir / "workflow").exists()
@@ -69,7 +69,7 @@ class TestSetupWorkingDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             working_dir = Path(tmpdir) / "test_session"
             setup_working_directory(str(working_dir))
-            
+
             pyproject_content = (working_dir / "pyproject.toml").read_text()
             assert "[project]" in pyproject_content
             assert "python" in pyproject_content.lower()
@@ -79,7 +79,7 @@ class TestSetupWorkingDirectory:
         with tempfile.TemporaryDirectory() as tmpdir:
             working_dir = Path(tmpdir) / "test_session"
             setup_working_directory(str(working_dir))
-            
+
             readme_content = (working_dir / "README.md").read_text()
             assert "Agentic Data Scientist Session" in readme_content
             assert "user_data/" in readme_content
@@ -90,12 +90,11 @@ class TestSetupWorkingDirectory:
         """Test that setup is idempotent (can be called multiple times)."""
         with tempfile.TemporaryDirectory() as tmpdir:
             working_dir = Path(tmpdir) / "test_session"
-            
+
             # Call setup twice
             setup_working_directory(str(working_dir))
             setup_working_directory(str(working_dir))
-            
+
             # Should still have correct structure
             assert (working_dir / "user_data").exists()
             assert (working_dir / "pyproject.toml").exists()
-
