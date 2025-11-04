@@ -1,0 +1,74 @@
+[project]
+name = "agentic-data-scientist"
+version = "0.1.0"
+description = "Agentic Data Scientist - General-purpose multi-agent framework with ADK and Claude Code"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "HNX AI Team"}
+]
+keywords = ["ai", "agents", "adk", "claude", "multi-agent", "llm", "data-science"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "google-adk>=1.15.1",
+    "google-genai>=1.26.0",
+    "claude-agent-sdk>=0.1.5",
+    "click>=8.1.0",
+    "aiofiles>=24.1.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.0",
+    "jinja2>=3.1.0",
+    "mcp>=1.0.0",
+    "litellm>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "ruff>=0.13.1",
+]
+
+[project.scripts]
+agentic-data-scientist = "agentic_data_scientist.cli.main:main"
+
+[project.urls]
+Homepage = "https://github.com/HNX-AI/agentic-data-scientist"
+Documentation = "https://github.com/HNX-AI/agentic-data-scientist/blob/main/docs"
+Repository = "https://github.com/HNX-AI/agentic-data-scientist"
+Issues = "https://github.com/HNX-AI/agentic-data-scientist/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".git", ".venv", ".mypy_cache", ".ruff_cache", "__pycache__", "build", "dist"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+docstring-code-format = false
+
+[tool.ruff.lint]
+extend-select = ["I"]
+ignore = ["E501", "W505", "COM812", "ISC001"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
