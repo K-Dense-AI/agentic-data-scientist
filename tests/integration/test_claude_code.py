@@ -19,20 +19,21 @@ class TestClaudeCodeIntegration:
         with tempfile.TemporaryDirectory() as tmpdir:
             agent = ClaudeCodeAgent(
                 working_dir=tmpdir,
-                model="claude-sonnet-4-5-latest",
+                model="claude-sonnet-4-5-20250929",
             )
 
             assert agent.working_dir == tmpdir
-            assert agent.model == "claude-sonnet-4-5-latest"
+            assert agent.model == "claude-sonnet-4-5-20250929"
 
     @patch('agentic_data_scientist.agents.claude_code.agent.query')
     @patch('agentic_data_scientist.agents.claude_code.agent.ClaudeAgentOptions')
     async def test_claude_agent_options_include_mcp(self, mock_options_class, mock_query):
         """Test that ClaudeAgentOptions includes MCP server configuration."""
         import tempfile
+        import uuid
 
         from google.adk.agents import InvocationContext
-        from google.adk.sessions import InMemorySession
+        from google.adk.sessions import InMemorySessionService
 
         # Mock query to return an empty async generator
         async def mock_generator(*args, **kwargs):
@@ -47,15 +48,22 @@ class TestClaudeCodeIntegration:
         with tempfile.TemporaryDirectory() as tmpdir:
             agent = ClaudeCodeAgent(working_dir=tmpdir)
 
-            # Create a mock context
-            session = InMemorySession(
+            # Create session using InMemorySessionService
+            session_service = InMemorySessionService()
+            session = await session_service.create_session(
                 app_name="test",
                 user_id="test_user",
                 session_id="test_session",
             )
             session.state["implementation_task"] = "Test task"
 
-            ctx = InvocationContext(session=session)
+            # Create InvocationContext with all required fields
+            ctx = InvocationContext(
+                session=session,
+                session_service=session_service,
+                invocation_id=str(uuid.uuid4()),
+                agent=agent,
+            )
 
             # Run the agent
             events = []

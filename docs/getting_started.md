@@ -41,7 +41,7 @@ GOOGLE_API_KEY=your_google_key_here  # Optional, for ADK agents
 
 # Optional: Model configuration
 DEFAULT_MODEL=google/gemini-2.5-pro
-CODING_MODEL=claude-sonnet-4-5-latest
+CODING_MODEL=claude-sonnet-4-5-20250929
 
 # Optional: MCP server configuration
 MCP_FILESYSTEM_ROOT=/path/to/your/data

@@ -33,7 +33,7 @@ jobs:
         run: uv run ruff format --check .
 
   test:
-    name: Test with Pytest
+    name: Unit Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -62,10 +62,6 @@ jobs:
       
       - name: Run unit tests
         run: uv run pytest tests/unit -v --tb=short
-      
-      - name: Run integration tests
-        run: uv run pytest tests/integration -v --tb=short || true
-        # Integration tests may fail without API keys, so we allow failure
       
       - name: Generate coverage report
         if: always()

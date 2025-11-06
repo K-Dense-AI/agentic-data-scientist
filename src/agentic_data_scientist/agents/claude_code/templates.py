@@ -112,6 +112,9 @@ def get_claude_context(implementation_plan: str, working_dir: str) -> str:
 
     context = f"""Execute the following implementation plan COMPLETELY and STRICTLY.
 
+IMPORTANT: You have scientific Skills available in .claude/skills/. 
+Start by asking "What Skills are available?" to discover specialized tools for your task.
+
 Parse this plan into discrete steps and execute EVERY step in order. Do not exit until ALL steps are completed.
 
 Working directory: {working_dir}
@@ -120,11 +123,12 @@ IMPLEMENTATION PLAN TO EXECUTE:
 {truncated_plan}
 
 CRITICAL REQUIREMENTS:
-1. Complete EVERY step in the plan - no partial execution allowed
-2. Save all outputs with descriptive filenames using {working_dir}/ prefix
-3. Print progress updates after each step
-4. Generate comprehensive README.md documentation
-5. Create final execution summary ONLY after ALL steps are done
+1. Discover and use available Skills for specialized tasks
+2. Complete EVERY step in the plan - no partial execution allowed
+3. Save all outputs with descriptive filenames using {working_dir}/ prefix
+4. Print progress updates after each step
+5. Update README.md incrementally - DO NOT create separate summary files
+6. Document which Skills were used in README
 
 You MUST implement the entire plan. Parse it, execute it step by step, and verify completion."""
 
@@ -143,7 +147,7 @@ def get_minimal_pyproject() -> str:
     return """[project]
 name = "agentic-data-scientist-session"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     # Core scientific computing
     "numpy>=2.0.0",
@@ -169,8 +173,4 @@ dependencies = [
     # Environment management
     "python-dotenv>=1.0.0",
 ]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 """

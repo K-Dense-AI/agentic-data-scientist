@@ -6,43 +6,16 @@ that provide tools to the agents using ADK's built-in MCPToolset integration.
 """
 
 import os
-from typing import Any, Optional
+from typing import Optional
 
 from google.adk.tools.mcp_tool.mcp_toolset import (
     McpToolset,
-    SseConnectionParams,
     StdioConnectionParams,
     StdioServerParameters,
 )
 
 
-def filesystem_tool_filter(tool: Any) -> bool:
-    """
-    Filter function for filesystem MCP tools to allow only read-only operations.
-
-    Parameters
-    ----------
-    tool : Any
-        The tool to filter
-
-    Returns
-    -------
-    bool
-        True if the tool is allowed (read-only), False otherwise
-    """
-    # Allow only read-only operations
-    allowed_operations = [
-        "read_file",
-        "read_multiple_files",
-        "list_directory",
-        "search_files",
-        "get_file_info",
-        "list_allowed_directories",
-    ]
-    # Tool might be an object with a name attribute or a dict
-    tool_name = getattr(tool, 'name', tool.get('name') if isinstance(tool, dict) else None)
-    return tool_name in allowed_operations
-
+MCP_CONNECTION_TIMEOUT = float(os.getenv("MCP_CONNECTION_TIMEOUT", "60.0"))
 
 def get_filesystem_toolset(working_dir: Optional[str] = None) -> McpToolset:
     """
@@ -59,14 +32,26 @@ def get_filesystem_toolset(working_dir: Optional[str] = None) -> McpToolset:
         Configured filesystem McpToolset with read-only filter
     """
     root_dir = working_dir or os.getenv("MCP_FILESYSTEM_ROOT", "/tmp")
+
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
                 command="npx",
                 args=["-y", "@modelcontextprotocol/server-filesystem", root_dir],
             ),
+            timeout=MCP_CONNECTION_TIMEOUT,
         ),
-        tool_filter=filesystem_tool_filter,
+        tool_filter=[
+            "read_text_file",
+            "read_media_file",
+            "read_multiple_files",
+            "list_directory"
+            "list_directory_with_sizes",
+            "search_files",
+            "directory_tree",
+            "get_file_info",
+            "list_allowed_directories",
+        ],
     )
 
 
@@ -82,27 +67,10 @@ def get_fetch_toolset() -> McpToolset:
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-fetch"],
+                command="docker",
+                args=["run", "-i", "--rm", "mcp/fetch"],
             ),
-        ),
-    )
-
-
-def get_claude_scientific_skills_toolset() -> McpToolset:
-    """
-    Get McpToolset for Claude Scientific Skills hosted MCP server.
-
-    Returns
-    -------
-    McpToolset
-        Configured Claude Scientific Skills McpToolset using SSE connection
-    """
-    mcp_url = os.getenv("CLAUDE_SCIENTIFIC_SKILLS_URL", "https://mcp.k-dense.ai/claude-scientific-skills/mcp")
-
-    return McpToolset(
-        connection_params=SseConnectionParams(
-            url=mcp_url,
+            timeout=MCP_CONNECTION_TIMEOUT,
         ),
     )
 
@@ -110,6 +78,9 @@ def get_claude_scientific_skills_toolset() -> McpToolset:
 def get_default_mcp_toolsets(working_dir: Optional[str] = None) -> list[McpToolset]:
     """
     Get default list of MCP toolsets for ADK agents.
+    
+    Note: Scientific skills are now provided via Claude native Skills
+    loaded from .claude/skills/ rather than MCP.
 
     Parameters
     ----------
@@ -124,5 +95,4 @@ def get_default_mcp_toolsets(working_dir: Optional[str] = None) -> list[McpTools
     return [
         get_filesystem_toolset(working_dir),
         get_fetch_toolset(),
-        get_claude_scientific_skills_toolset(),
     ]

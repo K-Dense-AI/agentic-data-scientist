@@ -1,14 +1,18 @@
 # MCP Configuration Guide
 
-This guide explains how to configure Model Context Protocol (MCP) servers with Agentic Data Scientist.
+This guide explains how to configure Model Context Protocol (MCP) servers and Claude Skills with Agentic Data Scientist.
 
 ## Overview
 
-Agentic Data Scientist uses MCP servers to provide tools to agents. The framework comes with three pre-configured MCP servers:
+Agentic Data Scientist provides tools to agents through two mechanisms:
 
-1. **filesystem**: Read-only file system access
-2. **fetch**: Web content fetching
-3. **claude-scientific-skills**: Advanced scientific computing tools (hosted)
+1. **MCP Servers** (for ADK agents):
+   - **filesystem**: Read-only file system access
+   - **fetch**: Web content fetching
+
+2. **Claude Skills** (for Claude Code agents):
+   - **Scientific Skills**: 380+ skills from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+   - Auto-loaded at agent startup into `.claude/skills/`
 
 ## Pre-configured MCP Servers
 
@@ -43,48 +47,49 @@ Provides web content fetching capabilities.
 
 **Note:** No additional configuration required. Works out of the box.
 
-### Claude Scientific Skills MCP (Hosted)
+## Claude Skills
 
-Provides advanced scientific computing and analysis tools via a hosted MCP server.
+### Scientific Skills (Claude Code Agents)
+
+Claude Code agents have access to 380+ scientific skills that are automatically loaded at startup.
+
+**How It Works:**
+1. At agent startup, the [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills) repository is cloned
+2. Skills from `scientific-databases/` and `scientific-packages/` are copied to `.claude/skills/`
+3. Claude autonomously discovers and uses relevant skills based on task descriptions
+
+**Available Skill Categories:**
+- **Scientific Databases**: UniProt, PubChem, PDB, ChEMBL, KEGG, and more
+- **Scientific Packages**: BioPython, RDKit, MDAnalysis, PyMOL, and more
+
+**Usage:**
+Skills are discovered automatically. The agent will:
+1. Ask "What Skills are available?" at the start of tasks
+2. Review skills relevant to the current task
+3. Invoke skills by describing matching tasks
 
 **Configuration:**
-```bash
-# Default URL (provided by K-Dense AI)
-export CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
-```
+No configuration needed - skills are loaded automatically. The repository is re-cloned on each agent startup to ensure up-to-date skills.
 
-**Features:**
-- Advanced mathematical computations
-- Scientific data analysis
-- Statistical tools
-- And more scientific capabilities
-
-## Agent-Specific MCP Configuration
+## Agent-Specific Configuration
 
 ### ADK Agents
 
-ADK agents have access to all three MCP servers:
+ADK agents have access to MCP servers:
 - **filesystem** (read-only)
 - **fetch**
-- **claude-scientific-skills**
 
 These are configured automatically when creating an ADK agent.
 
 ### Claude Code Agents
 
 Claude Code agents have access to:
-- **claude-scientific-skills** (hosted MCP via Claude Agent SDK)
+- **Claude Skills** (scientific databases and packages)
+- Skills loaded from `.claude/skills/` via `setting_sources=["project"]`
 
-Configuration is handled automatically through the Claude Agent SDK's MCP support.
+Configuration is handled automatically by the agent setup.
 
 ## Environment Variables
-
-### MCP Server URLs
-
-```bash
-# Claude Scientific Skills URL (default shown)
-CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
-```
 
 ### Filesystem Configuration
 
@@ -106,13 +111,11 @@ You can customize MCP toolsets in your code:
 from agentic_data_scientist.mcp import (
     get_filesystem_toolset,
     get_fetch_toolset,
-    get_claude_scientific_skills_toolset,
 )
 
 # Get individual toolsets
 fs_toolset = get_filesystem_toolset(working_dir="/custom/path")
 fetch_toolset = get_fetch_toolset()
-css_toolset = get_claude_scientific_skills_toolset()
 
 # Use with custom agent configuration
 # (Advanced use case - see extending.md)
@@ -160,12 +163,7 @@ def my_custom_filter(tool):
    node --version
    ```
 
-2. Verify the MCP server URL is accessible:
-   ```bash
-   curl https://mcp.k-dense.ai/claude-scientific-skills/mcp
-   ```
-
-3. Check network connectivity and firewall settings
+2. Check network connectivity and firewall settings
 
 #### Filesystem Access Denied
 
@@ -288,10 +286,10 @@ custom_toolset = McpToolset(
 
 ## Best Practices
 
-1. **Use appropriate MCP servers** for your use case
-   - Filesystem for data access
-   - Fetch for web content
-   - Claude Scientific Skills for scientific computing
+1. **Use appropriate tools** for your use case
+   - MCP Filesystem for data access (ADK agents)
+   - MCP Fetch for web content (ADK agents)
+   - Claude Skills for scientific computing (Claude Code agents)
 
 2. **Configure working directories carefully**
    - Use absolute paths

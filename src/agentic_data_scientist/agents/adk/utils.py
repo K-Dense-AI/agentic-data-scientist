@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Model configuration
 DEFAULT_MODEL_NAME = os.getenv("DEFAULT_MODEL", "google/gemini-2.5-pro")
 REVIEW_MODEL_NAME = os.getenv("REVIEW_MODEL", "google/gemini-2.5-pro")
-CODING_MODEL_NAME = os.getenv("CODING_MODEL", "claude-sonnet-4-5-latest")
+CODING_MODEL_NAME = os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929")
 
 logger.info(f"[AgenticDS] DEFAULT_MODEL={DEFAULT_MODEL_NAME}")
 logger.info(f"[AgenticDS] REVIEW_MODEL={REVIEW_MODEL_NAME}")

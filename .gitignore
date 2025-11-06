@@ -43,3 +43,5 @@ sessions/
 sandbox/
 tmp/
 
+# Data files
+data/

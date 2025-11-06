@@ -60,6 +60,7 @@ Agentic Data Scientist is designed to empower researchers, data scientists, and 
   - `results/` - Analysis outputs
   - `README.md` - Implementation documentation
 - **Project Root**: Read-only access to framework files
+- **Reading Length**: You only have limited context length, so be conservative about how much content you read from files each time you call the tool to read.
 
 **Important:**
 - The **coding agent** (separate from you) handles all implementation, file creation, and execution

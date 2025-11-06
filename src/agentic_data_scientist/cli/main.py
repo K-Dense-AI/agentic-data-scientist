@@ -25,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.argument('query', required=False)
-@click.option('--files', '-f', multiple=True, help='Files to include in the query')
+@click.option(
+    '--files',
+    '-f',
+    multiple=True,
+    help='Files or directories to include in the query (directories are uploaded recursively)',
+)
 @click.option(
     '--mode',
     default='orchestrated',
@@ -54,6 +59,10 @@ def main(
 
         agentic-data-scientist "Analyze this data" --files data.csv
 
+        agentic-data-scientist "Analyze all data" --files data_folder/
+
+        agentic-data-scientist "Compare datasets" -f data1.csv -f data2.csv -f experiments/
+
         agentic-data-scientist "Write a Python script" --mode simple --stream
     """
     # Set logging level
@@ -72,10 +81,27 @@ def main(
     file_list = []
     for f in files:
         path = Path(f)
-        if path.exists():
-            file_list.append((path.name, path))
-        else:
+        if not path.exists():
             click.echo(f"Warning: File not found: {f}", err=True)
+            continue
+
+        # Handle directory - recursively add all files
+        if path.is_dir():
+            files_found = 0
+            for file_path in path.rglob('*'):
+                if file_path.is_file():
+                    # Preserve relative path structure from the directory being uploaded
+                    relative_name = file_path.relative_to(path)
+                    file_list.append((str(relative_name), file_path))
+                    files_found += 1
+
+            if files_found > 0:
+                click.echo(f"Found {files_found} file(s) in directory: {path}")
+            else:
+                click.echo(f"Warning: No files found in directory: {path}", err=True)
+        else:
+            # Handle single file
+            file_list.append((path.name, path))
 
     # Map mode to agent_type
     agent_type = "adk" if mode == "orchestrated" else "claude_code"

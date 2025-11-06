@@ -34,6 +34,7 @@ from agentic_data_scientist.core.events import (
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+logging.getLogger("google_adk.google.adk.tools.base_authenticated_tool").setLevel(logging.ERROR)
 
 
 @dataclass
@@ -133,7 +134,7 @@ class DataScientist:
 
             self.agent = ClaudeCodeAgent(
                 working_dir=str(self.working_dir),
-                model=self.config.model or "claude-sonnet-4-5-latest",
+                model=self.config.model or "claude-sonnet-4-5-20250929",
             )
         else:
             raise ValueError(f"Unknown agent type: {self.config.agent_type}")

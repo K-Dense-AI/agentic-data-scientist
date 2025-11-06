@@ -22,12 +22,12 @@ class TestSessionConfig:
         """Test custom configuration."""
         config = SessionConfig(
             agent_type="claude_code",
-            model="claude-sonnet-4-5-latest",
+            model="claude-sonnet-4-5-20250929",
             mcp_servers=["filesystem", "fetch"],
             max_llm_calls=512,
         )
         assert config.agent_type == "claude_code"
-        assert config.model == "claude-sonnet-4-5-latest"
+        assert config.model == "claude-sonnet-4-5-20250929"
         assert config.mcp_servers == ["filesystem", "fetch"]
         assert config.max_llm_calls == 512
 
@@ -91,9 +91,9 @@ class TestDataScientist:
 
     def test_initialization_claude_code(self):
         """Test DataScientist initialization with Claude Code agent."""
-        ds = DataScientist(agent_type="claude_code", model="claude-sonnet-4-5-latest")
+        ds = DataScientist(agent_type="claude_code", model="claude-sonnet-4-5-20250929")
         assert ds.config.agent_type == "claude_code"
-        assert ds.config.model == "claude-sonnet-4-5-latest"
+        assert ds.config.model == "claude-sonnet-4-5-20250929"
         assert ds.session_id.startswith("session_")
         assert ds.working_dir.exists()
         ds.cleanup()

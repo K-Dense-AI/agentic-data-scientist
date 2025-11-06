@@ -19,7 +19,7 @@ You DON'T need to "hand over" or "pass control" - it's automatic after you finis
 2. Stop immediately - don't call any tools
 
 **On SUBSEQUENT calls (when implementation_summary has content):**
-1. Check what's been done (use list_dir and read_file)
+1. Check what's been done using directory listing and file reading tools available to you
 2. If ALL plan steps are complete: Call exit_loop_simple and stop
 3. If more work needed: Output next task and stop
 

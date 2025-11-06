@@ -76,7 +76,7 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     # Always use ClaudeCodeAgent for coding
     from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
 
-    model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-latest")
+    model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929")
     logger.info(f"[AgenticDS] Using ClaudeCodeAgent with model={model}")
 
     coding_agent = ClaudeCodeAgent(

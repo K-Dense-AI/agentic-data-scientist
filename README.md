@@ -102,10 +102,10 @@ Agentic Data Scientist uses a layered architecture:
 │  │  Or: Claude Code Direct            │ │
 │  └────────────────────────────────────┘ │
 ├──────────────────────────────────────────┤
-│           MCP Tool Layer                 │
-│  • filesystem (read-only for ADK)        │
-│  • fetch                                 │
-│  • claude-scientific-skills (hosted)     │
+│           Tool Layer                     │
+│  • MCP: filesystem (read-only), fetch    │
+│  • Claude Skills: scientific databases   │
+│    and packages (380+ skills)            │
 └──────────────────────────────────────────┘
 ```
 
@@ -114,13 +114,14 @@ Agentic Data Scientist uses a layered architecture:
 **ADK Agent** (`agent_type="adk"`)
 - Multi-agent orchestration with planning and verification
 - Uses Claude Code for implementation tasks
-- Access to MCP tools: filesystem (read-only), fetch, claude-scientific-skills
+- Access to MCP tools: filesystem (read-only), fetch
 - Best for: Complex multi-step tasks requiring planning
 
 **Claude Code Agent** (`agent_type="claude_code"`)
 - Direct Claude Sonnet 4.5 integration
 - Code execution and development capabilities
-- Access to claude-scientific-skills MCP via Claude Agent SDK
+- Access to 380+ scientific Skills (databases and packages)
+- Skills auto-loaded from cloned repository at startup
 - Streaming execution support
 - Best for: Direct coding, scripting, and development tasks
 
@@ -137,24 +138,28 @@ GOOGLE_API_KEY=your_key_here
 
 # Optional: Model configuration
 DEFAULT_MODEL=google/gemini-2.5-pro
-CODING_MODEL=claude-sonnet-4-5-latest
+CODING_MODEL=claude-sonnet-4-5-20250929
 
 # Optional: MCP server configuration
 MCP_FILESYSTEM_ROOT=/path/to/your/data
-CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
 ```
 
-### MCP Servers
+### Tools & Skills
 
-Agentic Data Scientist uses Model Context Protocol (MCP) servers for tool access:
+Agentic Data Scientist provides tools through two mechanisms:
 
-- **filesystem**: Read-only file operations (for ADK agents)
+**MCP Servers** (for ADK agents):
+- **filesystem**: Read-only file operations
   - Allowed: read_file, list_directory, search_files, get_file_info
   - Blocked: write_file, delete_file, edit_file (for security)
 - **fetch**: Web content fetching and HTTP requests
-- **claude-scientific-skills**: Hosted scientific computing tools
-  - URL: https://mcp.k-dense.ai/claude-scientific-skills/mcp
-  - Available to both ADK and Claude Code agents
+
+**Claude Skills** (for Claude Code agents):
+- **Scientific Skills**: 380+ skills automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+  - Scientific databases (UniProt, PubChem, PDB, etc.)
+  - Scientific packages (BioPython, RDKit, MDAnalysis, etc.)
+  - Auto-cloned to `.claude/skills/` at agent startup
+  - Agent discovers and uses skills autonomously
 
 See [docs/mcp_configuration.md](docs/mcp_configuration.md) for detailed configuration.
 

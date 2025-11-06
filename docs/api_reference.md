@@ -26,7 +26,7 @@ ds = DataScientist(
   
 - **model** (str, optional): Specific model to use. Defaults:
   - ADK: `google/gemini-2.5-pro`
-  - Claude Code: `claude-sonnet-4-5-latest`
+  - Claude Code: `claude-sonnet-4-5-20250929`
   
 - **mcp_servers** (list, optional): List of MCP servers to enable (ADK only)
 
@@ -308,7 +308,7 @@ agentic-data-scientist "Debug this" --verbose
 ### Optional
 
 - **DEFAULT_MODEL**: Default model for ADK agents (default: `google/gemini-2.5-pro`)
-- **CODING_MODEL**: Model for Claude Code agent (default: `claude-sonnet-4-5-latest`)
+- **CODING_MODEL**: Model for Claude Code agent (default: `claude-sonnet-4-5-20250929`)
 - **MCP_FILESYSTEM_ROOT**: Root directory for filesystem MCP (default: `/tmp`)
 - **CLAUDE_SCIENTIFIC_SKILLS_URL**: URL for claude-scientific-skills MCP (default: `https://mcp.k-dense.ai/claude-scientific-skills/mcp`)
 

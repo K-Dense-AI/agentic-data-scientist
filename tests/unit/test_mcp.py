@@ -28,7 +28,7 @@ class TestFilesystemToolFilter:
         for tool_name in allowed_tools:
             tool = Mock()
             tool.name = tool_name
-            assert filesystem_tool_filter(tool) is True
+            assert filesystem_tool_filter(tool, None) is True
 
     def test_deny_write_operations(self):
         """Test that write operations are denied."""
@@ -43,7 +43,7 @@ class TestFilesystemToolFilter:
         for tool_name in denied_tools:
             tool = Mock()
             tool.name = tool_name
-            assert filesystem_tool_filter(tool) is False
+            assert filesystem_tool_filter(tool, None) is False
 
 
 class TestMCPToolsetGetters:

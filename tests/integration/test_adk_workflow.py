@@ -10,7 +10,7 @@ import pytest
 class TestADKWorkflow:
     """Test full ADK workflow integration."""
 
-    @patch('agentic_data_scientist.agents.adk.agent.get_mcp_toolsets')
+    @patch('agentic_data_scientist.mcp.get_mcp_toolsets')
     def test_create_agent(self, mock_toolsets):
         """Test creating an ADK agent with MCP toolsets."""
         import tempfile
@@ -24,7 +24,7 @@ class TestADKWorkflow:
             assert agent is not None
             assert agent.name == "agentic_data_scientist_workflow"
 
-    @patch('agentic_data_scientist.agents.adk.agent.get_mcp_toolsets')
+    @patch('agentic_data_scientist.mcp.get_mcp_toolsets')
     def test_agent_has_sub_agents(self, mock_toolsets):
         """Test that created agent has proper sub-agents."""
         import tempfile
@@ -39,8 +39,8 @@ class TestADKWorkflow:
             assert hasattr(agent, 'sub_agents')
             assert len(agent.sub_agents) == 4  # root, generator, planning_loop, summary
 
-    @patch('agentic_data_scientist.mcp.config.MCPToolset')
-    @patch('agentic_data_scientist.agents.adk.agent.get_mcp_toolsets')
+    @patch('agentic_data_scientist.mcp.config.McpToolset')
+    @patch('agentic_data_scientist.mcp.get_mcp_toolsets')
     def test_agent_with_mcp_integration(self, mock_get_toolsets, mock_toolset_class):
         """Test agent creation with MCP toolset integration."""
         import tempfile

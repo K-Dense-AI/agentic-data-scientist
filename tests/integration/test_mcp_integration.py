@@ -16,7 +16,7 @@ from agentic_data_scientist.mcp.registry import get_mcp_toolsets
 class TestMCPIntegration:
     """Test MCP integration."""
 
-    @patch('agentic_data_scientist.mcp.config.MCPToolset')
+    @patch('agentic_data_scientist.mcp.config.McpToolset')
     def test_filesystem_toolset_with_read_only_filter(self, mock_toolset_class):
         """Test filesystem toolset is configured with read-only filter."""
         from agentic_data_scientist.mcp.config import filesystem_tool_filter
@@ -30,7 +30,7 @@ class TestMCPIntegration:
         call_kwargs = mock_toolset_class.call_args[1]
         assert call_kwargs['tool_filter'] is filesystem_tool_filter
 
-    @patch('agentic_data_scientist.mcp.config.MCPToolset')
+    @patch('agentic_data_scientist.mcp.config.McpToolset')
     def test_fetch_toolset_configuration(self, mock_toolset_class):
         """Test fetch toolset configuration."""
         mock_toolset = Mock()
@@ -40,7 +40,7 @@ class TestMCPIntegration:
 
         mock_toolset_class.assert_called_once()
 
-    @patch('agentic_data_scientist.mcp.config.MCPToolset')
+    @patch('agentic_data_scientist.mcp.config.McpToolset')
     def test_claude_scientific_skills_sse_connection(self, mock_toolset_class):
         """Test Claude Scientific Skills uses SSE connection."""
         mock_toolset = Mock()
@@ -49,8 +49,12 @@ class TestMCPIntegration:
         toolset = get_claude_scientific_skills_toolset()  # noqa: F841
 
         mock_toolset_class.assert_called_once()
-        # Verify SSE connection params were created
-        assert mock_toolset_class.create_sse_connection_params.called
+        # Verify SSE connection params were passed to McpToolset constructor
+        call_kwargs = mock_toolset_class.call_args[1]
+        assert 'connection_params' in call_kwargs
+        # Verify it's an SseConnectionParams instance (check the type name)
+        connection_params = call_kwargs['connection_params']
+        assert type(connection_params).__name__ == 'SseConnectionParams'
 
     @patch('agentic_data_scientist.mcp.config.get_default_mcp_toolsets')
     def test_get_mcp_toolsets_returns_list(self, mock_get_default):
@@ -65,7 +69,7 @@ class TestMCPIntegration:
         assert isinstance(toolsets, list)
         assert len(toolsets) == 3
 
-    @patch('agentic_data_scientist.mcp.config.get_default_mcp_toolsets')
+    @patch('agentic_data_scientist.mcp.registry.get_default_mcp_toolsets')
     def test_get_mcp_toolsets_handles_errors(self, mock_get_default):
         """Test get_mcp_toolsets handles errors gracefully."""
         mock_get_default.side_effect = Exception("Connection failed")
@@ -86,15 +90,15 @@ class TestToolFilter:
 
         read_tool = Mock()
         read_tool.name = "read_file"
-        assert filesystem_tool_filter(read_tool) is True
+        assert filesystem_tool_filter(read_tool, None) is True
 
         list_tool = Mock()
         list_tool.name = "list_directory"
-        assert filesystem_tool_filter(list_tool) is True
+        assert filesystem_tool_filter(list_tool, None) is True
 
         search_tool = Mock()
         search_tool.name = "search_files"
-        assert filesystem_tool_filter(search_tool) is True
+        assert filesystem_tool_filter(search_tool, None) is True
 
     def test_read_only_filter_blocks_writes(self):
         """Test that read-only filter blocks write operations."""
@@ -102,12 +106,12 @@ class TestToolFilter:
 
         write_tool = Mock()
         write_tool.name = "write_file"
-        assert filesystem_tool_filter(write_tool) is False
+        assert filesystem_tool_filter(write_tool, None) is False
 
         delete_tool = Mock()
         delete_tool.name = "delete_file"
-        assert filesystem_tool_filter(delete_tool) is False
+        assert filesystem_tool_filter(delete_tool, None) is False
 
         edit_tool = Mock()
         edit_tool.name = "edit_file"
-        assert filesystem_tool_filter(edit_tool) is False
+        assert filesystem_tool_filter(edit_tool, None) is False

@@ -41,6 +41,60 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+def setup_skills_directory(working_dir: str) -> None:
+    """
+    Clone claude-scientific-skills and copy to .claude/skills/.
+    
+    Parameters
+    ----------
+    working_dir : str
+        Working directory to set up skills in
+    """
+    import shutil
+    import subprocess
+    import tempfile
+    
+    working_path = Path(working_dir)
+    skills_dir = working_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Clone repo to temp directory
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo_url = "https://github.com/K-Dense-AI/claude-scientific-skills.git"
+        tmp_repo = Path(tmpdir) / "claude-scientific-skills"
+        
+        try:
+            logger.info(f"Cloning claude-scientific-skills to {tmp_repo}")
+            subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(tmp_repo)],
+                check=True,
+                capture_output=True,
+                timeout=60
+            )
+            
+            # Copy scientific-databases and scientific-packages
+            for source_folder in ["scientific-databases", "scientific-packages"]:
+                source_path = tmp_repo / source_folder
+                if source_path.exists():
+                    # Copy each skill directory
+                    for skill_dir in source_path.iterdir():
+                        if skill_dir.is_dir():
+                            dest_path = skills_dir / skill_dir.name
+                            if dest_path.exists():
+                                shutil.rmtree(dest_path)
+                            shutil.copytree(skill_dir, dest_path)
+                            logger.info(f"Copied skill: {skill_dir.name}")
+            
+            logger.info(f"Skills setup complete in {skills_dir}")
+            
+        except subprocess.TimeoutExpired:
+            logger.warning("Git clone timed out - skills may not be available")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to clone skills repo: {e.stderr.decode()}")
+        except Exception as e:
+            logger.warning(f"Error setting up skills: {e}")
+
+
 def setup_working_directory(working_dir: str) -> None:
     """
     Set up the working directory with required files and structure.
@@ -58,6 +112,9 @@ def setup_working_directory(working_dir: str) -> None:
 
     for subdir in subdirs:
         (working_path / subdir).mkdir(exist_ok=True)
+
+    # Set up skills directory
+    setup_skills_directory(working_dir)
 
     # Create pyproject.toml if it doesn't exist
     pyproject_path = working_path / "pyproject.toml"
@@ -100,10 +157,9 @@ class ClaudeCodeAgent(Agent):
     # Add model config to allow extra attributes
     model_config = {"extra": "allow"}
 
-    # Define working_dir as an instance variable
+    # Define working_dir and output_key as instance variables
     _working_dir: Optional[str] = None
     _output_key: str = "implementation_summary"
-    _model: str = "claude-sonnet-4-5-latest"
 
     def __init__(
         self,
@@ -129,12 +185,14 @@ class ClaudeCodeAgent(Agent):
         model : str, optional
             Claude model identifier to use.
         """
+        # Pass model to parent Agent class (it has a model field)
         super().__init__(
-            name=name, description=description or "A coding agent that uses Claude Agent SDK to implement plans"
+            name=name,
+            description=description or "A coding agent that uses Claude Agent SDK to implement plans",
+            model=model or os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929"),
         )
         self._working_dir = working_dir
         self._output_key = output_key
-        self._model = model or os.getenv("CODING_MODEL", "claude-sonnet-4-5-latest")
 
     @property
     def working_dir(self) -> Optional[str]:
@@ -143,10 +201,6 @@ class ClaudeCodeAgent(Agent):
     @property
     def output_key(self) -> str:
         return self._output_key
-
-    @property
-    def model(self) -> str:
-        return self._model
 
     def _truncate_summary(self, summary: str) -> str:
         """
@@ -251,34 +305,25 @@ Requirements:
             system_instructions = get_claude_instructions(state=state, working_dir=working_dir)
 
             env = os.environ.copy()
-            env["ANTHROPIC_MODEL"] = self._model
-
-            # Configure MCP servers for Claude Agent SDK
-            # Use hosted claude-scientific-skills MCP server
-            mcp_url = os.getenv("CLAUDE_SCIENTIFIC_SKILLS_URL", "https://mcp.k-dense.ai/claude-scientific-skills/mcp")
-
-            mcp_servers = {
-                "claude-scientific-skills": {
-                    "url": mcp_url,
-                }
-            }
+            env["ANTHROPIC_MODEL"] = self.model
 
             # Create options for Claude Agent SDK
+            # Skills are loaded from .claude/skills/ via setting_sources
             options = ClaudeAgentOptions(
                 cwd=working_dir,
                 permission_mode="bypassPermissions",
-                model=self._model,
+                model=self.model,
                 env=env,
                 system_prompt={"type": "preset", "preset": "claude_code", "append": system_instructions},
-                setting_sources=["project", "local"],
-                mcp_servers=mcp_servers,
+                setting_sources=["project"],  # Load Skills from .claude/skills/
+                mcp_servers={},  # No MCP servers - using native Skills instead
             )
 
             yield Event(
                 author=self.name,
                 content=types.Content(
                     role="model",
-                    parts=[types.Part.from_text(text=f"Starting Claude Agent (coding mode) with model: {self._model}")],
+                    parts=[types.Part.from_text(text=f"Starting Claude Agent (coding mode) with model: {self.model}")],
                 ),
             )
 
