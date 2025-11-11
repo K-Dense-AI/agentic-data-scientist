@@ -12,10 +12,12 @@ from google.adk.tools.mcp_tool.mcp_toolset import (
     McpToolset,
     StdioConnectionParams,
     StdioServerParameters,
+    StreamableHTTPConnectionParams,
 )
 
 
 MCP_CONNECTION_TIMEOUT = float(os.getenv("MCP_CONNECTION_TIMEOUT", "60.0"))
+
 
 def get_filesystem_toolset(working_dir: Optional[str] = None) -> McpToolset:
     """
@@ -45,8 +47,7 @@ def get_filesystem_toolset(working_dir: Optional[str] = None) -> McpToolset:
             "read_text_file",
             "read_media_file",
             "read_multiple_files",
-            "list_directory"
-            "list_directory_with_sizes",
+            "list_directorylist_directory_with_sizes",
             "search_files",
             "directory_tree",
             "get_file_info",
@@ -75,10 +76,28 @@ def get_fetch_toolset() -> McpToolset:
     )
 
 
+def get_claude_scientific_skills_toolset() -> McpToolset:
+    """
+    Get McpToolset for Claude Scientific Skills hosted MCP server.
+
+    Returns
+    -------
+    McpToolset
+        Configured Claude Scientific Skills McpToolset using SSE connection
+    """
+    mcp_url = os.getenv("CLAUDE_SCIENTIFIC_SKILLS_URL", "https://mcp.k-dense.ai/claude-scientific-skills/mcp")
+
+    return McpToolset(
+        connection_params=StreamableHTTPConnectionParams(
+            url=mcp_url,
+        ),
+    )
+
+
 def get_default_mcp_toolsets(working_dir: Optional[str] = None) -> list[McpToolset]:
     """
     Get default list of MCP toolsets for ADK agents.
-    
+
     Note: Scientific skills are now provided via Claude native Skills
     loaded from .claude/skills/ rather than MCP.
 

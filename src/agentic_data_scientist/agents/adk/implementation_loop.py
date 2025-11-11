@@ -6,14 +6,14 @@ iterative loop to implement and verify solutions.
 """
 
 import logging
-import os
 
 from google.adk.planners import BuiltInPlanner
 from google.adk.tools.tool_context import CallbackContext
 from google.genai import types
 
 from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
-from agentic_data_scientist.agents.adk.utils import REVIEW_MODEL, exit_loop_simple, get_generate_content_config
+from agentic_data_scientist.agents.adk.review_confirmation import create_review_confirmation_agent
+from agentic_data_scientist.agents.adk.utils import REVIEW_MODEL, get_generate_content_config
 from agentic_data_scientist.prompts import load_prompt
 
 
@@ -57,7 +57,7 @@ def trim_history_to_recent_events(callback_context: CallbackContext, max_events:
 
 def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     """
-    Create the implementation agents (coding + review).
+    Create the implementation agents (coding + review + confirmation).
 
     Parameters
     ----------
@@ -69,21 +69,17 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     Returns
     -------
     tuple
-        (coding_agent, review_agent)
+        (coding_agent, review_agent, review_confirmation_agent)
     """
     logger.info(f"[AgenticDS] Initializing implementation agents with {len(mcp_toolsets)} MCP toolsets")
 
     # Always use ClaudeCodeAgent for coding
     from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
 
-    model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929")
-    logger.info(f"[AgenticDS] Using ClaudeCodeAgent with model={model}")
-
     coding_agent = ClaudeCodeAgent(
         name="coding_agent",
         description="A coding agent that uses Claude Code SDK to implement plans.",
         working_dir=working_dir,
-        model=model,
         output_key="implementation_summary",
     )
 
@@ -98,7 +94,7 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
         description="Reviews implementation and provides feedback or approval.",
         instruction=review_prompt,
         model=REVIEW_MODEL,
-        tools=[exit_loop_simple],
+        tools=mcp_toolsets,
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -116,4 +112,8 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
 
     logger.info("[AgenticDS] Implementation agents created successfully")
 
-    return coding_agent, review_agent
+    # Return coding agent, review agent, AND review confirmation agent
+    return coding_agent, review_agent, create_review_confirmation_agent(
+        auto_exit_on_completion=True,
+        prompt_name="implementation_review_confirmation"
+    )

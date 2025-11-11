@@ -1,34 +1,68 @@
 # Extending Agentic Data Scientist
 
-This guide explains how to customize and extend Agentic Data Scientist for your specific needs.
+This guide explains how to customize and extend the Agentic Data Scientist multi-agent workflow.
 
 ## Table of Contents
 
+- [Understanding the Agent Hierarchy](#understanding-the-agent-hierarchy)
 - [Custom Prompts](#custom-prompts)
 - [Custom Agents](#custom-agents)
 - [Custom MCP Toolsets](#custom-mcp-toolsets)
 - [Custom Event Handlers](#custom-event-handlers)
 - [Integration Examples](#integration-examples)
 
+## Understanding the Agent Hierarchy
+
+The ADK workflow consists of multiple specialized agents organized into phases:
+
+```
+Workflow Root (SequentialAgent)
+├── Planning Loop (NonEscalatingLoopAgent)
+│   ├── Plan Maker (LoopDetectionAgent)
+│   ├── Plan Reviewer (LoopDetectionAgent)
+│   └── Review Confirmation (LoopDetectionAgent)
+├── Plan Parser (LoopDetectionAgent)
+├── Stage Orchestrator (Custom Agent)
+│   └── For each stage:
+│       ├── Implementation Loop (NonEscalatingLoopAgent)
+│       │   ├── Coding Agent (ClaudeCodeAgent)
+│       │   ├── Review Agent (LoopDetectionAgent)
+│       │   └── Review Confirmation (LoopDetectionAgent)
+│       ├── Criteria Checker (LoopDetectionAgent)
+│       └── Stage Reflector (LoopDetectionAgent)
+└── Summary Agent (LoopDetectionAgent)
+```
+
+### Key Agent Types
+
+**LoopDetectionAgent**: Extends ADK's LlmAgent with loop detection to prevent infinite generation
+**ClaudeCodeAgent**: Wraps Claude Code SDK for implementation with tool access
+**NonEscalatingLoopAgent**: Manages iteration without propagating escalation flags upward
+**StageOrchestratorAgent**: Custom orchestrator managing stage-by-stage execution
+
 ## Custom Prompts
 
-Agentic Data Scientist uses prompt templates for different agent roles. You can customize these prompts.
+Each agent in the workflow is driven by a prompt template. You can customize these to change agent behavior.
 
 ### Prompt Structure
 
 Prompts are stored in `src/agentic_data_scientist/prompts/`:
+
 ```
 prompts/
 ├── base/
-│   ├── agent_base.md          # Root agent instructions
-│   ├── plan_generator.md      # Planning phase
-│   ├── plan_orchestrator.md   # Orchestration
-│   ├── plan_verifier.md       # Verification
-│   ├── coding_base.md         # Coding instructions (deprecated)
-│   ├── coding_review.md       # Review instructions
-│   └── summary.md             # Summary generation
+│   ├── plan_maker.md               # Creates analysis plans
+│   ├── plan_reviewer.md            # Reviews plans for completeness
+│   ├── plan_review_confirmation.md # Decides if plan is approved
+│   ├── plan_parser.md              # Structures plan into stages
+│   ├── coding_review.md            # Reviews implementations
+│   ├── implementation_review_confirmation.md  # Decides if implementation is approved
+│   ├── criteria_checker.md         # Checks success criteria
+│   ├── stage_reflector.md          # Adapts remaining stages
+│   ├── summary.md                  # Generates final report
+│   └── global_preamble.md          # Shared context for all agents
 └── domain/
-    └── bioinformatics/         # Domain-specific prompts
+    └── bioinformatics/             # Domain-specific customizations
         ├── science_methodology.md
         └── interactive_base.md
 ```
@@ -39,7 +73,7 @@ prompts/
 from agentic_data_scientist.prompts import load_prompt
 
 # Load a base prompt
-agent_prompt = load_prompt("agent_base")
+plan_maker_prompt = load_prompt("plan_maker")
 
 # Load a domain-specific prompt
 bio_prompt = load_prompt("science_methodology", domain="bioinformatics")
@@ -47,96 +81,217 @@ bio_prompt = load_prompt("science_methodology", domain="bioinformatics")
 
 ### Creating Custom Prompts
 
-1. Create a new markdown file in `prompts/base/` or `prompts/domain/your_domain/`
-2. Write your prompt instructions
-3. Load it using `load_prompt()`
+1. **Create a new prompt file** in `prompts/base/` or `prompts/domain/your_domain/`
 
-Example custom prompt (`prompts/base/my_custom_agent.md`):
+Example: `prompts/base/custom_plan_maker.md`
+
 ```markdown
-# My Custom Agent
+$global_preamble
 
-You are a specialized agent for [specific task].
+You are a specialized planning agent for [your domain].
 
-## Guidelines
+# Your Role
 
-1. Always follow [specific methodology]
-2. Use [specific tools] when available
-3. Format output as [specific format]
+Create detailed analysis plans for [specific task type].
 
-## Instructions
+# Output Format
 
-[Detailed instructions here]
+Provide structured plans containing:
+1. **Analysis Stages** - Step-by-step breakdown
+2. **Success Criteria** - How to verify completion
+3. **Recommended Approaches** - Domain-specific methods
+
+# Domain Knowledge
+
+[Include specific expertise, methodologies, or considerations]
+
+# Context
+
+**User Request:**
+{original_user_input?}
 ```
 
-Usage:
+2. **Use the custom prompt** by loading it:
+
 ```python
-custom_instructions = load_prompt("my_custom_agent")
+from agentic_data_scientist.prompts import load_prompt
+
+custom_prompt = load_prompt("custom_plan_maker")
 ```
+
+### Customizing Specific Agent Prompts
+
+To customize a specific agent's behavior, modify its prompt:
+
+**Example: Customize Plan Maker for Financial Analysis**
+
+Create `prompts/domain/finance/plan_maker.md`:
+
+```markdown
+$global_preamble
+
+You are a financial data science strategist specializing in quantitative analysis.
+
+# Your Role
+
+Transform financial analysis requests into comprehensive, risk-aware plans.
+
+# Financial Analysis Stages
+
+Focus on:
+1. Data quality and compliance verification
+2. Risk assessment and statistical validation  
+3. Regulatory compliance checks
+4. Backtesting and validation strategies
+
+# Success Criteria Requirements
+
+Every plan must include:
+- Data quality thresholds
+- Statistical significance requirements
+- Risk metrics and controls
+- Audit trail requirements
+
+[... rest of customized prompt ...]
+```
+
+Then load it:
+
+```python
+financial_prompt = load_prompt("plan_maker", domain="finance")
+```
+
+### Prompt Variables
+
+Prompts can include dynamic variables that are interpolated at runtime:
+
+- `{original_user_input?}`: The user's query
+- `{high_level_plan?}`: The current plan
+- `{high_level_stages?}`: List of stages
+- `{high_level_success_criteria?}`: Success criteria
+- `{stage_implementations?}`: Completed stage summaries
+- `{current_stage?}`: Current stage being implemented
+- `{implementation_summary?}`: Implementation output
+- `{review_feedback?}`: Review agent feedback
 
 ## Custom Agents
 
-### Creating a Custom Agent
+### Extending Existing Agents
 
-You can create custom agents by extending ADK's `Agent` class:
+You can customize existing agent roles by creating modified versions:
 
 ```python
-from google.adk.agents import Agent, InvocationContext
+from google.adk.agents import LlmAgent
+from google.genai import types
+from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
+from agentic_data_scientist.agents.adk.utils import DEFAULT_MODEL, get_generate_content_config
+from agentic_data_scientist.prompts import load_prompt
+
+def create_custom_plan_maker(mcp_toolsets):
+    """Create a custom plan maker with specialized behavior."""
+    
+    # Load custom prompt
+    custom_instructions = load_prompt("custom_plan_maker", domain="finance")
+    
+    return LoopDetectionAgent(
+        name="custom_plan_maker",
+        model=DEFAULT_MODEL,
+        description="Custom financial planning agent",
+        instruction=custom_instructions,
+        tools=mcp_toolsets,
+        output_key="high_level_plan",
+        generate_content_config=get_generate_content_config(temperature=0.4),
+        # Custom loop detection thresholds
+        min_pattern_length=300,
+        repetition_threshold=4,
+    )
+```
+
+### Creating New Agent Roles
+
+You can add entirely new agents to the workflow:
+
+```python
+from google.adk.agents import InvocationContext
 from google.adk.events import Event
 from google.genai import types
 from typing import AsyncGenerator
 
-class MyCustomAgent(Agent):
-    """Custom agent for specific tasks."""
+class ValidationAgent(LoopDetectionAgent):
+    """Custom validation agent for specific checks."""
     
-    def __init__(self, name: str = "my_agent", **kwargs):
-        super().__init__(name=name, **kwargs)
-        # Initialize custom attributes
-        
-    async def _run_async_impl(
-        self, 
-        ctx: InvocationContext
-    ) -> AsyncGenerator[Event, None]:
-        """Execute the agent logic."""
-        # Get state
+    def __init__(self, validation_rules, **kwargs):
+        super().__init__(**kwargs)
+        self.validation_rules = validation_rules
+    
+    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
+        """Custom validation logic."""
         state = ctx.session.state
-        user_input = state.get("user_message", "")
         
-        # Perform custom processing
-        result = await self.process(user_input)
+        # Get implementation results
+        implementation = state.get("implementation_summary", "")
         
-        # Yield result as event
+        # Apply custom validation rules
+        validation_results = []
+        for rule_name, rule_fn in self.validation_rules.items():
+            passed = rule_fn(implementation)
+            validation_results.append({
+                'rule': rule_name,
+                'passed': passed
+            })
+        
+        # Store results
+        state["validation_results"] = validation_results
+        
+        # Yield results as event
+        summary = f"Validation: {sum(r['passed'] for r in validation_results)}/{len(validation_results)} checks passed"
         yield Event(
             author=self.name,
             content=types.Content(
                 role="model",
-                parts=[types.Part.from_text(text=result)]
+                parts=[types.Part(text=summary)]
             ),
         )
-    
-    async def process(self, input_text: str) -> str:
-        """Custom processing logic."""
-        # Implement your logic here
-        return f"Processed: {input_text}"
 ```
 
-### Integrating Custom Agents
+### Modifying the Workflow
+
+To integrate custom agents into the workflow, you'll need to modify the agent factory:
 
 ```python
-from agentic_data_scientist.core.api import DataScientist
+from agentic_data_scientist.agents.adk.agent import create_agent
+import logging
 
-# You would need to modify the create_agent function
-# to support your custom agent type
+logger = logging.getLogger(__name__)
 
-# Or use the agent directly with ADK's Runner
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-
-agent = MyCustomAgent()
-session_service = InMemorySessionService()
-runner = Runner(agent=agent, session_service=session_service)
+def create_custom_workflow(working_dir, mcp_servers=None):
+    """Create workflow with custom agents."""
+    
+    # Get standard agents
+    from agentic_data_scientist.agents.adk.agent import (
+        create_agent as base_create_agent
+    )
+    
+    # Create base workflow
+    workflow = base_create_agent(working_dir, mcp_servers)
+    
+    # Or build custom workflow from scratch
+    from google.adk.agents import SequentialAgent
+    
+    custom_workflow = SequentialAgent(
+        name="custom_workflow",
+        description="Workflow with custom agents",
+        sub_agents=[
+            # Your custom agent composition
+        ]
+    )
+    
+    return custom_workflow
 ```
 
 ## Custom MCP Toolsets
+
+MCP toolsets provide tools to agents. You can create custom toolsets for specialized functionality.
 
 ### Creating Custom MCP Toolsets
 
@@ -149,109 +304,136 @@ from google.adk.tools.mcp_tool.mcp_toolset import (
 )
 
 # Stdio-based MCP server
-def get_my_custom_toolset():
+def get_database_toolset():
+    """MCP toolset for database operations."""
     return McpToolset(
         connection_params=StdioConnectionParams(
             server_params=StdioServerParameters(
                 command="node",
-                args=["my-custom-mcp-server.js"],
+                args=["path/to/database-mcp-server.js"],
+                env={"DATABASE_URL": "postgresql://..."}
             ),
         ),
-        tool_filter=my_tool_filter,  # Optional
+        tool_filter=database_tool_filter,
     )
 
-# SSE-based (hosted) MCP server
-def get_hosted_custom_toolset():
+def database_tool_filter(tool) -> bool:
+    """Filter to only allow read operations."""
+    tool_name = getattr(tool, 'name', None)
+    # Only allow SELECT queries, not INSERT/UPDATE/DELETE
+    allowed = ["query_select", "list_tables", "describe_table"]
+    return tool_name in allowed
+
+# SSE-based (hosted) MCP server  
+def get_api_toolset():
+    """MCP toolset for external API."""
     return McpToolset(
         connection_params=SseConnectionParams(
-            url="https://my-server.com/mcp",
+            url="https://api.example.com/mcp",
         ),
     )
-```
-
-### Custom Tool Filters
-
-```python
-def my_tool_filter(tool) -> bool:
-    """Filter tools based on custom logic."""
-    tool_name = getattr(tool, 'name', None)
-    
-    # Only allow specific tools
-    allowed_tools = ["tool1", "tool2", "tool3"]
-    return tool_name in allowed_tools
 ```
 
 ### Using Custom Toolsets
 
+Add your custom toolsets to the workflow:
+
 ```python
-from agentic_data_scientist.agents.adk import create_agent
-
-# Modify create_agent to accept custom toolsets
-# Or create agents directly with custom toolsets
-
-from google.adk.agents import LoopDetectionAgent
-
-custom_agent = LoopDetectionAgent(
-    name="custom_agent",
-    model="google/gemini-2.5-pro",
-    instruction="Custom instructions",
-    tools=[get_my_custom_toolset()],  # Add your toolsets
-)
+def get_custom_mcp_toolsets(working_dir):
+    """Get all toolsets including custom ones."""
+    from agentic_data_scientist.mcp import get_mcp_toolsets
+    
+    # Get standard toolsets
+    standard_toolsets = get_mcp_toolsets(working_dir)
+    
+    # Add custom toolsets
+    custom_toolsets = [
+        get_database_toolset(),
+        get_api_toolset(),
+    ]
+    
+    return standard_toolsets + custom_toolsets
 ```
 
 ## Custom Event Handlers
 
 ### Processing Streaming Events
 
+Create custom handlers to process workflow events:
+
 ```python
-async def process_events(ds, query):
-    """Custom event processing."""
+async def custom_event_processor(ds, query):
+    """Custom event processing with metrics."""
+    
+    metrics = {
+        'plan_iterations': 0,
+        'implementation_iterations': 0,
+        'stages_completed': 0,
+        'tools_used': set(),
+    }
+    
     async for event in await ds.run_async(query, stream=True):
         event_type = event.get('type')
+        author = event.get('author', '')
         
+        # Track metrics
+        if 'plan_maker' in author:
+            metrics['plan_iterations'] += 1
+        elif 'coding_agent' in author:
+            metrics['implementation_iterations'] += 1
+        elif 'Stage' in event.get('content', ''):
+            metrics['stages_completed'] += 1
+        
+        if event_type == 'function_call':
+            metrics['tools_used'].add(event['name'])
+        
+        # Custom handling
         if event_type == 'message':
-            # Handle message events
+            # Filter or transform messages
             content = event['content']
-            author = event['author']
-            print(f"[{author}]: {content}")
-            
-        elif event_type == 'function_call':
-            # Handle function calls
-            tool_name = event['name']
-            args = event['arguments']
-            print(f"Calling tool: {tool_name} with {args}")
-            
-        elif event_type == 'usage':
-            # Track token usage
-            usage = event['usage']
-            print(f"Tokens used: {usage}")
-            
-        elif event_type == 'error':
-            # Handle errors
-            error_msg = event['content']
-            print(f"Error: {error_msg}")
-            
+            if 'ERROR' in content:
+                logger.error(f"Error in {author}: {content}")
+        
         elif event_type == 'completed':
-            # Task completed
-            duration = event['duration']
-            files = event['files_created']
-            print(f"Completed in {duration}s, created {len(files)} files")
+            # Log metrics
+            logger.info(f"Workflow Metrics: {metrics}")
+            print(f"\n📊 Workflow completed with:")
+            print(f"  - {metrics['plan_iterations']} planning iterations")
+            print(f"  - {metrics['implementation_iterations']} implementation iterations")
+            print(f"  - {metrics['stages_completed']} stages completed")
+            print(f"  - {len(metrics['tools_used'])} unique tools used")
 ```
 
 ### Custom Event Transformations
 
+Transform events before processing:
+
 ```python
-from agentic_data_scientist.core.events import event_to_dict, MessageEvent
+from agentic_data_scientist.core.events import event_to_dict
 
 def transform_event(event):
-    """Transform event to custom format."""
+    """Add custom fields to events."""
     event_dict = event_to_dict(event)
     
-    # Add custom fields
-    event_dict['custom_field'] = 'value'
-    event_dict['timestamp_formatted'] = format_timestamp(event_dict['timestamp'])
+    # Add custom metadata
+    event_dict['processed_at'] = time.time()
+    event_dict['workflow_phase'] = detect_phase(event_dict['author'])
+    
+    # Enhance with additional info
+    if event_dict['type'] == 'message':
+        event_dict['word_count'] = len(event_dict['content'].split())
     
     return event_dict
+
+def detect_phase(author):
+    """Detect which workflow phase an event belongs to."""
+    if 'plan_maker' in author or 'plan_reviewer' in author:
+        return 'planning'
+    elif 'stage_orchestrator' in author or 'coding_agent' in author:
+        return 'execution'
+    elif 'summary' in author:
+        return 'summary'
+    return 'unknown'
 ```
 
 ## Integration Examples
@@ -259,53 +441,105 @@ def transform_event(event):
 ### Integrating with FastAPI
 
 ```python
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, HTTPException
 from agentic_data_scientist import DataScientist
 import asyncio
+import json
 
 app = FastAPI()
 
-@app.websocket("/ws/chat")
+@app.websocket("/ws/analyze")
 async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time analysis."""
     await websocket.accept()
     
-    async with DataScientist() as ds:
-        while True:
-            # Receive message
-            data = await websocket.receive_text()
-            
-            # Process with streaming
-            async for event in await ds.run_async(data, stream=True):
+    try:
+        # Receive request
+        data = await websocket.receive_json()
+        query = data.get('query')
+        files = data.get('files', [])
+        
+        # Run workflow with streaming
+        async with DataScientist() as ds:
+            async for event in await ds.run_async(
+                query,
+                files=[(f['name'], f['content']) for f in files],
+                stream=True
+            ):
                 # Send events to client
                 await websocket.send_json(event)
+                
+    except Exception as e:
+        await websocket.send_json({
+            'type': 'error',
+            'content': str(e)
+        })
+    finally:
+        await websocket.close()
+
+@app.post("/api/analyze")
+async def analyze_endpoint(query: str, files: list = None):
+    """REST endpoint for analysis."""
+    async with DataScientist() as ds:
+        result = await ds.run_async(query, files=files)
+        
+        if result.status == "error":
+            raise HTTPException(status_code=500, detail=result.error)
+        
+        return {
+            'response': result.response,
+            'files_created': result.files_created,
+            'duration': result.duration
+        }
 ```
 
 ### Integrating with Jupyter Notebooks
 
 ```python
-# In a Jupyter notebook
 from agentic_data_scientist import DataScientist
 from IPython.display import display, Markdown, HTML
+import asyncio
 
-async def notebook_analysis(query):
-    """Run analysis in Jupyter with nice formatting."""
+async def notebook_analysis(query, files=None):
+    """Run analysis in Jupyter with rich formatting."""
+    display(Markdown(f"## Analysis Request\n\n{query}"))
+    
     async with DataScientist() as ds:
-        display(Markdown(f"## Query: {query}"))
+        display(Markdown("### Workflow Progress"))
         
-        async for event in await ds.run_async(query, stream=True):
+        current_phase = None
+        async for event in await ds.run_async(
+            query,
+            files=files,
+            stream=True
+        ):
+            author = event.get('author', '')
+            
+            # Track phase changes
+            if 'plan_maker' in author and current_phase != 'Planning':
+                current_phase = 'Planning'
+                display(Markdown(f"**Phase: {current_phase}**"))
+            elif 'coding_agent' in author and current_phase != 'Execution':
+                current_phase = 'Execution'
+                display(Markdown(f"**Phase: {current_phase}**"))
+            elif 'summary' in author and current_phase != 'Summary':
+                current_phase = 'Summary'
+                display(Markdown(f"**Phase: {current_phase}**"))
+            
             if event['type'] == 'message':
                 content = event['content']
-                author = event['author']
-                display(Markdown(f"**{author}**: {content}"))
-                
+                # Display formatted messages
+                if len(content) < 200:
+                    display(Markdown(f"*{author}*: {content}"))
+                    
             elif event['type'] == 'completed':
                 files = event['files_created']
-                if files:
-                    display(Markdown(f"### Created Files:\n" + 
-                                   "\n".join(f"- {f}" for f in files)))
+                display(Markdown(f"### Results\n\n**Files Created:**"))
+                for f in files:
+                    display(Markdown(f"- `{f}`"))
 
-# Run in notebook
-await notebook_analysis("Analyze this dataset")
+# Usage in notebook
+await notebook_analysis("Analyze customer churn", files=[('data.csv', data)])
 ```
 
 ### Custom Session Management
@@ -313,149 +547,87 @@ await notebook_analysis("Analyze this dataset")
 ```python
 from agentic_data_scientist import DataScientist
 import json
+from pathlib import Path
 
 class PersistentDataScientist:
     """DataScientist with session persistence."""
     
-    def __init__(self, session_file="session.json"):
-        self.session_file = session_file
+    def __init__(self, session_dir="./sessions"):
+        self.session_dir = Path(session_dir)
+        self.session_dir.mkdir(exist_ok=True)
+        self.ds = None
+        self.session_id = None
+    
+    async def start_session(self, session_id=None):
+        """Start or resume a session."""
         self.ds = DataScientist()
-        self.context = self.load_context()
+        await self.ds.__aenter__()
+        
+        if session_id:
+            # Resume existing session
+            self.session_id = session_id
+            context = self.load_context(session_id)
+        else:
+            # New session
+            self.session_id = self.ds.session_id
+            context = {}
+        
+        return context
     
-    def load_context(self):
-        """Load previous session context."""
-        try:
-            with open(self.session_file, 'r') as f:
+    def load_context(self, session_id):
+        """Load session context."""
+        context_file = self.session_dir / f"{session_id}.json"
+        if context_file.exists():
+            with open(context_file) as f:
                 return json.load(f)
-        except FileNotFoundError:
-            return {}
+        return {}
     
-    def save_context(self):
+    def save_context(self, context):
         """Save session context."""
-        with open(self.session_file, 'w') as f:
-            json.dump(self.context, f)
+        context_file = self.session_dir / f"{self.session_id}.json"
+        with open(context_file, 'w') as f:
+            json.dump(context, f, indent=2)
     
-    async def run(self, query):
-        """Run with persistent context."""
-        result = await self.ds.run_async(query, context=self.context)
-        self.save_context()
-        return result
-```
-
-### Batch Processing
-
-```python
-async def batch_process(queries, output_dir="results"):
-    """Process multiple queries in batch."""
-    import os
-    os.makedirs(output_dir, exist_ok=True)
-    
-    results = []
-    async with DataScientist() as ds:
-        for i, query in enumerate(queries):
-            print(f"Processing query {i+1}/{len(queries)}: {query}")
-            
-            result = await ds.run_async(query)
-            results.append({
-                'query': query,
-                'response': result.response,
-                'files': result.files_created,
-                'duration': result.duration
-            })
-            
-            # Save individual result
-            with open(f"{output_dir}/result_{i+1}.json", 'w') as f:
-                json.dump(results[-1], f, indent=2)
-    
-    return results
-
-# Usage
-queries = [
-    "What is Python?",
-    "Explain quantum computing",
-    "How does machine learning work?"
-]
-
-results = await batch_process(queries)
-```
-
-## Plugin Architecture
-
-### Creating a Plugin
-
-```python
-class DataScientistPlugin:
-    """Base class for plugins."""
-    
-    def __init__(self, ds: DataScientist):
-        self.ds = ds
+    async def run(self, query, context=None):
+        """Run query with persistent context."""
+        if context is None:
+            context = self.load_context(self.session_id)
         
-    async def on_query(self, query: str):
-        """Hook called before query execution."""
-        pass
-        
-    async def on_result(self, result):
-        """Hook called after query execution."""
-        pass
-
-class LoggingPlugin(DataScientistPlugin):
-    """Plugin that logs all queries and results."""
-    
-    async def on_query(self, query: str):
-        print(f"Query: {query}")
-        
-    async def on_result(self, result):
-        print(f"Result status: {result.status}")
-        print(f"Duration: {result.duration}s")
-```
-
-### Using Plugins
-
-```python
-class PluggableDataScientist(DataScientist):
-    """DataScientist with plugin support."""
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.plugins = []
-    
-    def add_plugin(self, plugin):
-        self.plugins.append(plugin)
-    
-    async def run_async(self, query, **kwargs):
-        # Call pre-hooks
-        for plugin in self.plugins:
-            await plugin.on_query(query)
-        
-        # Run actual query
-        result = await super().run_async(query, **kwargs)
-        
-        # Call post-hooks
-        for plugin in self.plugins:
-            await plugin.on_result(result)
+        result = await self.ds.run_async(query, context=context)
+        self.save_context(context)
         
         return result
+    
+    async def close(self):
+        """Close session."""
+        if self.ds:
+            await self.ds.__aexit__(None, None, None)
 
 # Usage
-ds = PluggableDataScientist()
-ds.add_plugin(LoggingPlugin(ds))
-result = await ds.run_async("What is Python?")
+pds = PersistentDataScientist()
+context = await pds.start_session()
+
+# Run queries
+result1 = await pds.run("Analyze this dataset", context)
+result2 = await pds.run("What are the key trends?", context)
+
+await pds.close()
 ```
 
 ## Best Practices
 
-1. **Keep prompts modular**: Break down complex prompts into reusable components
-2. **Use type hints**: Always use type hints for custom code
-3. **Handle errors**: Implement proper error handling in custom agents
-4. **Document everything**: Add docstrings to all custom components
-5. **Test thoroughly**: Write tests for custom functionality
-6. **Follow conventions**: Match the existing code style and patterns
+1. **Test Custom Prompts Thoroughly**: Validate prompt changes with diverse queries
+2. **Use Type Hints**: Always include type hints in custom code
+3. **Handle Errors**: Implement proper error handling in custom agents
+4. **Document Customizations**: Add docstrings explaining custom behavior
+5. **Keep Prompts Modular**: Break complex prompts into reusable components
+6. **Version Control Prompts**: Track prompt changes like code
+7. **Monitor Agent Behavior**: Log and analyze agent outputs during development
 
 ## See Also
 
-- [Getting Started Guide](getting_started.md)
-- [API Reference](api_reference.md)
-- [MCP Configuration](mcp_configuration.md)
-- [ADK Documentation](https://google.github.io/adk-docs/)
-- [Claude Agent SDK Documentation](https://docs.claude.com/en/api/agent-sdk)
-
+- [Getting Started Guide](getting_started.md) - Understand the workflow
+- [API Reference](api_reference.md) - Complete API documentation
+- [MCP Configuration](mcp_configuration.md) - Configure tools
+- [ADK Documentation](https://google.github.io/adk-docs/) - Google ADK reference
+- [Claude SDK Documentation](https://docs.anthropic.com/) - Claude integration

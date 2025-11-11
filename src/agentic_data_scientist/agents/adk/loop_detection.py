@@ -206,6 +206,8 @@ class LoopDetectionAgent(LlmAgent):
                         # Keep only recent content for analysis (sliding window)
                         if len(accumulated_text) > self.window_size:
                             accumulated_text = accumulated_text[-self.window_size :]
+                            # Update the main buffer to prevent memory leak
+                            self._content_buffer = accumulated_text
 
                         # Detect repetition patterns
                         loop_detected, pattern = self._detect_pattern_repetition(accumulated_text)
@@ -304,53 +306,53 @@ class LoopDetectionAgent(LlmAgent):
             async for event in self._llm_flow.run_live(ctx):
                 self._event_count += 1
 
-            # Only check for loops in events from THIS agent, not sub-agents
-            is_own_event = getattr(event, 'author', None) == self.name
+                # Only check for loops in events from THIS agent, not sub-agents
+                is_own_event = getattr(event, 'author', None) == self.name
 
-            # Extract and check text
-            event_text = self._extract_text_from_event(event)
+                # Extract and check text
+                event_text = self._extract_text_from_event(event)
 
-            if event_text and is_own_event:
-                self._content_buffer += event_text
+                if event_text and is_own_event:
+                    self._content_buffer += event_text
 
-                # Keep only recent content
-                if len(self._content_buffer) > self.window_size:
-                    self._content_buffer = self._content_buffer[-self.window_size :]
+                    # Keep only recent content
+                    if len(self._content_buffer) > self.window_size:
+                        self._content_buffer = self._content_buffer[-self.window_size :]
 
-                # Detect loops
-                if len(self._content_buffer) > self.min_pattern_length * 2:
-                    loop_detected, pattern = self._detect_pattern_repetition(self._content_buffer)
+                    # Detect loops
+                    if len(self._content_buffer) > self.min_pattern_length * 2:
+                        loop_detected, pattern = self._detect_pattern_repetition(self._content_buffer)
 
-                    if loop_detected and not self._loop_detected:
-                        self._loop_detected = True
+                        if loop_detected and not self._loop_detected:
+                            self._loop_detected = True
 
-                        logger.error(
-                            f"🔄 Loop detected in {self.name} (live mode) after {self._event_count} total events"
-                        )
-                        logger.error(f"Pattern sample: {pattern[:100]}..." if pattern else "Unknown pattern")
+                            logger.error(
+                                f"🔄 Loop detected in {self.name} (live mode) after {self._event_count} total events"
+                            )
+                            logger.error(f"Pattern sample: {pattern[:100]}..." if pattern else "Unknown pattern")
 
-                        # Create warning event
-                        warning_event = Event(
-                            author=self.name,
-                            content=types.Content(
-                                role="model",
-                                parts=[
-                                    types.Part(
-                                        text="\n\n[LOOP DETECTED] Stopping current agent execution due to repetitive output.\n\n"
-                                        "The current agent has been stopped to prevent infinite generation. "
-                                        "The workflow will continue with the next agent or step."
-                                    )
-                                ],
-                            ),
-                            turn_complete=True,
-                        )
+                            # Create warning event
+                            warning_event = Event(
+                                author=self.name,
+                                content=types.Content(
+                                    role="model",
+                                    parts=[
+                                        types.Part(
+                                            text="\n\n[LOOP DETECTED] Stopping current agent execution due to repetitive output.\n\n"
+                                            "The current agent has been stopped to prevent infinite generation. "
+                                            "The workflow will continue with the next agent or step."
+                                        )
+                                    ],
+                                ),
+                                turn_complete=True,
+                            )
 
-                        self._LlmAgent__maybe_save_output_to_state(warning_event)
-                        yield warning_event
+                            self._LlmAgent__maybe_save_output_to_state(warning_event)
+                            yield warning_event
 
-                        # Stop processing this agent only - do NOT set ctx.end_invocation
-                        # This allows the workflow to continue with other agents
-                        return
+                            # Stop processing this agent only - do NOT set ctx.end_invocation
+                            # This allows the workflow to continue with other agents
+                            return
 
                 # Process normally
                 self._LlmAgent__maybe_save_output_to_state(event)

@@ -19,7 +19,6 @@ class TestClaudeCodeIntegration:
         with tempfile.TemporaryDirectory() as tmpdir:
             agent = ClaudeCodeAgent(
                 working_dir=tmpdir,
-                model="claude-sonnet-4-5-20250929",
             )
 
             assert agent.working_dir == tmpdir

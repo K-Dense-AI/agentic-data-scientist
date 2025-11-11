@@ -1,315 +1,459 @@
-# MCP Configuration Guide
+# MCP Configuration
 
-This guide explains how to configure Model Context Protocol (MCP) servers and Claude Skills with Agentic Data Scientist.
+This guide explains how to configure Model Context Protocol (MCP) servers for Agentic Data Scientist.
 
 ## Overview
 
-Agentic Data Scientist provides tools to agents through two mechanisms:
+The ADK multi-agent workflow uses MCP servers to provide tools to agents. Different agents have access to different toolsets:
 
-1. **MCP Servers** (for ADK agents):
-   - **filesystem**: Read-only file system access
-   - **fetch**: Web content fetching
+- **Planning and Review Agents** (ADK): Use filesystem and fetch MCP servers for reading files and fetching web content
+- **Coding Agent** (Claude Code): Has access to 380+ scientific Skills for specialized tasks
 
-2. **Claude Skills** (for Claude Code agents):
-   - **Scientific Skills**: 380+ skills from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
-   - Auto-loaded at agent startup into `.claude/skills/`
+## MCP Servers
 
-## Pre-configured MCP Servers
+### Filesystem Server
 
-### Filesystem MCP (Read-Only)
+Provides read-only file operations to planning and review agents.
 
-Provides read-only access to the file system for ADK agents.
+**Available Tools:**
+- `read_file`: Read file contents
+- `list_directory`: List directory contents
+- `search_files`: Search for files by pattern
+- `get_file_info`: Get file metadata
 
-**Allowed Operations:**
-- `read_file` - Read file contents
-- `read_multiple_files` - Read multiple files at once
-- `list_directory` - List directory contents
-- `search_files` - Search for files by pattern
-- `get_file_info` - Get file metadata
-- `list_allowed_directories` - List accessible directories
+**Security:** Write operations are blocked (`write_file`, `delete_file`, `edit_file`) for safety.
 
 **Configuration:**
+
 ```bash
-# Set the root directory (default: /tmp)
-export MCP_FILESYSTEM_ROOT=/path/to/your/data
+# In .env file
+MCP_FILESYSTEM_ROOT=/path/to/your/data
 ```
 
-**Note:** Write operations (`write_file`, `delete_file`, etc.) are intentionally disabled for security.
+The filesystem server is restricted to this root directory and cannot access files outside it.
 
-### Fetch MCP
+**Usage in Workflow:**
 
-Provides web content fetching capabilities.
+```python
+from agentic_data_scientist import DataScientist
 
-**Operations:**
-- Fetch web pages
-- Download content
-- Process HTTP requests
+# Files uploaded are stored in the session's working directory
+# Planning and review agents can read these files using MCP
+with DataScientist() as ds:
+    result = ds.run(
+        "Analyze trends in this data",
+        files=[("data.csv", open("data.csv", "rb").read())]
+    )
+```
 
-**Note:** No additional configuration required. Works out of the box.
+### Fetch Server
 
-## Claude Skills
+Provides web content fetching capabilities to agents.
 
-### Scientific Skills (Claude Code Agents)
-
-Claude Code agents have access to 380+ scientific skills that are automatically loaded at startup.
-
-**How It Works:**
-1. At agent startup, the [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills) repository is cloned
-2. Skills from `scientific-databases/` and `scientific-packages/` are copied to `.claude/skills/`
-3. Claude autonomously discovers and uses relevant skills based on task descriptions
-
-**Available Skill Categories:**
-- **Scientific Databases**: UniProt, PubChem, PDB, ChEMBL, KEGG, and more
-- **Scientific Packages**: BioPython, RDKit, MDAnalysis, PyMOL, and more
+**Available Tools:**
+- `fetch`: Fetch content from URLs
+- `fetch_html`: Fetch and parse HTML content
 
 **Usage:**
-Skills are discovered automatically. The agent will:
-1. Ask "What Skills are available?" at the start of tasks
-2. Review skills relevant to the current task
-3. Invoke skills by describing matching tasks
 
-**Configuration:**
-No configuration needed - skills are loaded automatically. The repository is re-cloned on each agent startup to ensure up-to-date skills.
+```python
+# Agents can automatically fetch web content during analysis
+with DataScientist() as ds:
+    result = ds.run("Summarize the latest research on transformer architectures from ArXiv")
+```
 
-## Agent-Specific Configuration
+## Claude Scientific Skills
 
-### ADK Agents
+The coding agent has access to 380+ scientific Skills automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills).
 
-ADK agents have access to MCP servers:
-- **filesystem** (read-only)
-- **fetch**
+### Available Skill Categories
 
-These are configured automatically when creating an ADK agent.
+**Scientific Databases:**
+- UniProt, PubChem, PDB, KEGG, PubMed
+- COSMIC, ClinVar, GEO, ENA, Ensembl
+- STRING, Reactome, DrugBank, ChEMBL
+- And many more...
 
-### Claude Code Agents
+**Scientific Packages:**
+- BioPython, RDKit, PyDESeq2, scanpy, anndata
+- MDAnalysis, scikit-learn, PyTorch, TensorFlow
+- statsmodels, matplotlib, seaborn, polars
+- And many more...
 
-Claude Code agents have access to:
-- **Claude Skills** (scientific databases and packages)
-- Skills loaded from `.claude/skills/` via `setting_sources=["project"]`
+### How Skills Work
 
-Configuration is handled automatically by the agent setup.
+1. **Automatic Loading**: Skills are automatically cloned to `.claude/skills/` when the coding agent starts
+2. **Agent Discovery**: The coding agent discovers available Skills at runtime
+3. **Autonomous Usage**: The agent decides which Skills to use based on the task
+
+### Skill Configuration
+
+Skills are loaded automatically. No configuration needed, but you can customize:
+
+```bash
+# In .env file (optional)
+CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
+```
+
+### Using Skills in Analysis
+
+Skills are used transparently by the coding agent:
+
+```python
+from agentic_data_scientist import DataScientist
+
+# The coding agent will automatically use relevant Skills
+with DataScientist() as ds:
+    result = ds.run(
+        "Perform differential expression analysis on this RNA-seq data",
+        files=[
+            ("sample1.csv", open("sample1.csv", "rb").read()),
+            ("sample2.csv", open("sample2.csv", "rb").read())
+        ]
+    )
+    # Coding agent may use: pydeseq2, scanpy, matplotlib, seaborn, etc.
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                ADK Multi-Agent Workflow                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Planning & Review Agents (ADK)                             │
+│  ┌──────────────────────────────────────────────┐          │
+│  │ • Plan Maker                                 │          │
+│  │ • Plan Reviewer                              │          │
+│  │ • Review Agent                               │          │
+│  │ • Criteria Checker                           │          │
+│  │ • Stage Reflector                            │          │
+│  │ • Summary Agent                              │          │
+│  └────────────────────┬─────────────────────────┘          │
+│                       │                                     │
+│                       ├─── MCP: filesystem (read-only)      │
+│                       └─── MCP: fetch (web content)         │
+│                                                             │
+│  Coding Agent (Claude Code)                                 │
+│  ┌──────────────────────────────────────────────┐          │
+│  │ • Implementation                             │          │
+│  │ • Code execution                             │          │
+│  │ • File operations (read/write)               │          │
+│  └────────────────────┬─────────────────────────┘          │
+│                       │                                     │
+│                       └─── Claude Skills (380+)             │
+│                              ├─ Scientific DBs              │
+│                              └─ Scientific Packages         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Custom MCP Servers
+
+You can add custom MCP servers for specialized functionality.
+
+### Creating a Custom MCP Server
+
+Example: Database query server
+
+```javascript
+// database-mcp-server.js
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import pg from "pg";
+
+const { Pool } = pg;
+
+// Create database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+// Create MCP server
+const server = new Server(
+  {
+    name: "database-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Define tools
+server.setRequestHandler("tools/list", async () => {
+  return {
+    tools: [
+      {
+        name: "query_select",
+        description: "Execute a SELECT query on the database",
+        inputSchema: z.object({
+          query: z.string().describe("SQL SELECT query to execute"),
+        }),
+      },
+      {
+        name: "list_tables",
+        description: "List all tables in the database",
+        inputSchema: z.object({}),
+      },
+    ],
+  };
+});
+
+// Implement tools
+server.setRequestHandler("tools/call", async (request) => {
+  const { name, arguments: args } = request.params;
+  
+  switch (name) {
+    case "query_select": {
+      if (!args.query.trim().toUpperCase().startsWith("SELECT")) {
+        throw new Error("Only SELECT queries are allowed");
+      }
+      const result = await pool.query(args.query);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result.rows, null, 2),
+          },
+        ],
+      };
+    }
+    
+    case "list_tables": {
+      const result = await pool.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `);
+      return {
+        content: [
+          {
+            type: "text",
+            text: result.rows.map(r => r.table_name).join("\n"),
+          },
+        ],
+      };
+    }
+    
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+});
+
+// Start server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+### Integrating Custom MCP Server
+
+```python
+from google.adk.tools.mcp_tool.mcp_toolset import (
+    McpToolset,
+    StdioConnectionParams,
+    StdioServerParameters
+)
+
+def get_database_toolset():
+    """Create MCP toolset for database access."""
+    return McpToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command="node",
+                args=["path/to/database-mcp-server.js"],
+                env={"DATABASE_URL": "postgresql://localhost/mydb"}
+            ),
+        ),
+    )
+
+def get_custom_mcp_toolsets(working_dir):
+    """Get all MCP toolsets including custom ones."""
+    from agentic_data_scientist.mcp import get_mcp_toolsets
+    
+    # Standard toolsets
+    standard = get_mcp_toolsets(working_dir)
+    
+    # Add custom toolset
+    custom = [get_database_toolset()]
+    
+    return standard + custom
+```
+
+Then modify the agent creation to use custom toolsets:
+
+```python
+from agentic_data_scientist.agents.adk import create_agent
+
+# Create agent with custom toolsets
+agent = create_agent(
+    working_dir="/path/to/working/dir",
+    mcp_servers=["filesystem", "fetch", "database"]  # Add your custom server
+)
+```
+
+## Tool Filtering
+
+You can filter which tools are available to agents:
+
+```python
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+
+def safe_tool_filter(tool) -> bool:
+    """Only allow read operations."""
+    tool_name = getattr(tool, 'name', None)
+    
+    # Block write/delete operations
+    blocked = ['write_file', 'delete_file', 'drop_table', 'delete_record']
+    return tool_name not in blocked
+
+toolset = McpToolset(
+    connection_params=connection_params,
+    tool_filter=safe_tool_filter,
+)
+```
 
 ## Environment Variables
 
-### Filesystem Configuration
+All MCP-related environment variables:
 
 ```bash
-# Root directory for filesystem MCP (default: /tmp)
-MCP_FILESYSTEM_ROOT=/path/to/your/data
+# Filesystem MCP
+MCP_FILESYSTEM_ROOT=/path/to/data
 
-# Example: Use current project directory
-MCP_FILESYSTEM_ROOT=$(pwd)
-```
+# Claude Skills (optional, auto-configured)
+CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp
 
-## Advanced Configuration
-
-### Custom MCP Toolsets
-
-You can customize MCP toolsets in your code:
-
-```python
-from agentic_data_scientist.mcp import (
-    get_filesystem_toolset,
-    get_fetch_toolset,
-)
-
-# Get individual toolsets
-fs_toolset = get_filesystem_toolset(working_dir="/custom/path")
-fetch_toolset = get_fetch_toolset()
-
-# Use with custom agent configuration
-# (Advanced use case - see extending.md)
-```
-
-### Custom Tool Filters
-
-The filesystem toolset uses a tool filter to restrict operations to read-only:
-
-```python
-from agentic_data_scientist.mcp.config import filesystem_tool_filter
-
-# The filter allows only these operations:
-allowed_operations = [
-    "read_file",
-    "read_multiple_files",
-    "list_directory",
-    "search_files",
-    "get_file_info",
-    "list_allowed_directories",
-]
-```
-
-To create a custom filter:
-
-```python
-def my_custom_filter(tool):
-    """Custom tool filter."""
-    tool_name = getattr(tool, 'name', tool.get('name') if isinstance(tool, dict) else None)
-    # Add your filtering logic
-    return tool_name in my_allowed_operations
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### MCP Server Connection Failures
-
-**Problem:** Cannot connect to MCP server
-
-**Solutions:**
-1. Check that Node.js is installed:
-   ```bash
-   node --version
-   ```
-
-2. Check network connectivity and firewall settings
-
-#### Filesystem Access Denied
-
-**Problem:** Cannot access files in a directory
-
-**Solutions:**
-1. Ensure `MCP_FILESYSTEM_ROOT` is set correctly:
-   ```bash
-   echo $MCP_FILESYSTEM_ROOT
-   ```
-
-2. Check file permissions on the target directory
-
-3. Verify the path is absolute, not relative
-
-#### Tool Not Available
-
-**Problem:** Expected MCP tool is not available
-
-**Solutions:**
-1. Verify the MCP server is running and accessible
-
-2. Check that the tool is not filtered out (for filesystem MCP)
-
-3. Review agent logs for tool loading errors
-
-### Debugging
-
-Enable debug logging to see MCP tool loading:
-
-```python
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-```
-
-You should see log messages like:
-```
-INFO: Configured 3 MCP toolsets
-DEBUG: Loading MCP tools from filesystem
-DEBUG: Loading MCP tools from fetch
-DEBUG: Loading MCP tools from claude-scientific-skills
+# Custom MCP servers
+CUSTOM_MCP_SERVER_URL=https://your-server.com/mcp
+DATABASE_URL=postgresql://localhost/mydb
 ```
 
 ## Security Considerations
 
-### Read-Only Filesystem Access
+### Filesystem Access
 
-The filesystem MCP is intentionally configured as read-only for ADK agents to prevent:
-- Accidental file modifications
-- Data loss
-- Security vulnerabilities
+The filesystem MCP is configured for **read-only access**:
+- Agents can read files but cannot write, edit, or delete
+- Access is restricted to `MCP_FILESYSTEM_ROOT` directory
+- Cannot access files outside the root directory
 
-If you need write access, you should:
-1. Use Claude Code agent with appropriate permissions
-2. Implement custom tool filtering
-3. Use a dedicated working directory
+### API Access
 
-### Data Privacy
+When using custom MCP servers for API access:
+- Store API keys in environment variables, not code
+- Use tool filters to restrict dangerous operations
+- Implement rate limiting to prevent abuse
+- Log all API calls for audit purposes
 
-When using hosted MCP servers:
-- Be aware that data may be sent to external services
-- Review the hosted MCP server's privacy policy
-- Use environment-specific configuration for sensitive data
+### Database Access
 
-### Network Security
+For database MCP servers:
+- Only allow SELECT queries, block INSERT/UPDATE/DELETE
+- Use read-only database credentials
+- Implement query timeouts
+- Filter sensitive tables from access
 
-For production deployments:
-- Use HTTPS for hosted MCP servers
-- Implement authentication where supported
-- Consider using private/internal MCP servers
+## Troubleshooting
 
-## MCP Server Development
+### MCP Server Connection Issues
 
-### Creating Custom MCP Servers
+**Problem:** "Failed to connect to MCP server"
 
-You can create custom MCP servers for specific use cases. See the [MCP Specification](https://modelcontextprotocol.io/) for details.
+**Solutions:**
+1. Verify Node.js is installed: `node --version`
+2. Check server script path is correct
+3. Ensure environment variables are set
+4. Check server logs for errors
 
-Basic structure:
+### Filesystem Access Issues
+
+**Problem:** "Permission denied" when reading files
+
+**Solutions:**
+1. Verify `MCP_FILESYSTEM_ROOT` is set correctly
+2. Check file permissions
+3. Ensure path is within the root directory
+4. Try absolute paths instead of relative paths
+
+### Skills Not Loading
+
+**Problem:** Scientific Skills not available to coding agent
+
+**Solutions:**
+1. Check internet connection (Skills are cloned from GitHub)
+2. Verify `ANTHROPIC_API_KEY` is set
+3. Check `.claude/skills/` directory exists in working directory
+4. Review logs for cloning errors
+
+### Custom MCP Server Issues
+
+**Problem:** Custom tools not appearing
+
+**Solutions:**
+1. Verify server implements MCP protocol correctly
+2. Check server is running and accessible
+3. Review tool registration code
+4. Enable debug logging to see tool discovery
+
+## Examples
+
+### Example 1: Analysis with File Upload
+
 ```python
-# custom_mcp_server.py
-from mcp.server import Server
-from mcp import StdioServerParameters
+from agentic_data_scientist import DataScientist
 
-app = Server("my-custom-server")
-
-@app.list_tools()
-async def list_tools():
-    return [
-        {
-            "name": "my_tool",
-            "description": "Custom tool",
-            "inputSchema": { ... }
-        }
-    ]
-
-@app.call_tool()
-async def call_tool(name, arguments):
-    if name == "my_tool":
-        # Tool implementation
-        return result
+# Planning agents use filesystem MCP to read uploaded files
+# Coding agent uses Skills for implementation
+with DataScientist() as ds:
+    result = ds.run(
+        "Perform PCA on this gene expression dataset",
+        files=[("expression_data.csv", open("data.csv", "rb").read())]
+    )
 ```
 
-### Integrating Custom MCP Servers
+**What Happens:**
+1. Files uploaded to session working directory
+2. Plan Maker uses filesystem MCP to inspect data structure
+3. Coding Agent uses scanpy/anndata Skills for PCA implementation
+4. Review Agent uses filesystem MCP to verify outputs
 
-To integrate a custom MCP server:
+### Example 2: Web Content Analysis
 
 ```python
-from google.adk.tools.mcp_tool.mcp_toolset import McpToolset, StdioConnectionParams, StdioServerParameters
-
-custom_toolset = McpToolset(
-    connection_params=StdioConnectionParams(
-        server_params=StdioServerParameters(
-            command="python",
-            args=["custom_mcp_server.py"],
-        ),
-    ),
-)
+# Agents use fetch MCP to retrieve web content
+with DataScientist() as ds:
+    result = ds.run(
+        "Summarize recent papers on CRISPR from PubMed"
+    )
 ```
 
-## Best Practices
+**What Happens:**
+1. Plan includes fetching papers from PubMed
+2. Agents use fetch MCP or pubmed-database Skill to get papers
+3. Coding Agent processes and summarizes content
 
-1. **Use appropriate tools** for your use case
-   - MCP Filesystem for data access (ADK agents)
-   - MCP Fetch for web content (ADK agents)
-   - Claude Skills for scientific computing (Claude Code agents)
+### Example 3: Database Analysis
 
-2. **Configure working directories carefully**
-   - Use absolute paths
-   - Ensure proper permissions
-   - Isolate sessions with temp directories
+```python
+# With custom database MCP server
+with DataScientist() as ds:
+    result = ds.run(
+        "Analyze sales trends from the company database"
+    )
+```
 
-3. **Monitor MCP server health**
-   - Check logs for connection issues
-   - Implement retry logic for transient failures
-   - Use timeout configuration
-
-4. **Secure sensitive data**
-   - Don't expose credentials in MCP configurations
-   - Use environment variables
-   - Implement access controls
+**What Happens:**
+1. Agents use custom database MCP to query data
+2. Data retrieved and analyzed
+3. Results summarized in report
 
 ## See Also
 
-- [Getting Started Guide](getting_started.md)
-- [API Reference](api_reference.md)
-- [Extending Guide](extending.md)
-- [MCP Specification](https://modelcontextprotocol.io/)
-
+- [Getting Started Guide](getting_started.md) - Basic usage
+- [API Reference](api_reference.md) - Complete API docs
+- [Extending Guide](extending.md) - Custom toolsets
+- [MCP Specification](https://modelcontextprotocol.io/) - Protocol details

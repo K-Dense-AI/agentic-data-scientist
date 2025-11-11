@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 def setup_skills_directory(working_dir: str) -> None:
     """
     Clone claude-scientific-skills and copy to .claude/skills/.
-    
+
     Parameters
     ----------
     working_dir : str
@@ -53,25 +53,22 @@ def setup_skills_directory(working_dir: str) -> None:
     import shutil
     import subprocess
     import tempfile
-    
+
     working_path = Path(working_dir)
     skills_dir = working_path / ".claude" / "skills"
     skills_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Clone repo to temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_url = "https://github.com/K-Dense-AI/claude-scientific-skills.git"
         tmp_repo = Path(tmpdir) / "claude-scientific-skills"
-        
+
         try:
             logger.info(f"Cloning claude-scientific-skills to {tmp_repo}")
             subprocess.run(
-                ["git", "clone", "--depth", "1", repo_url, str(tmp_repo)],
-                check=True,
-                capture_output=True,
-                timeout=60
+                ["git", "clone", "--depth", "1", repo_url, str(tmp_repo)], check=True, capture_output=True, timeout=60
             )
-            
+
             # Copy scientific-databases and scientific-packages
             for source_folder in ["scientific-databases", "scientific-packages"]:
                 source_path = tmp_repo / source_folder
@@ -84,9 +81,9 @@ def setup_skills_directory(working_dir: str) -> None:
                                 shutil.rmtree(dest_path)
                             shutil.copytree(skill_dir, dest_path)
                             logger.info(f"Copied skill: {skill_dir.name}")
-            
+
             logger.info(f"Skills setup complete in {skills_dir}")
-            
+
         except subprocess.TimeoutExpired:
             logger.warning("Git clone timed out - skills may not be available")
         except subprocess.CalledProcessError as e:
@@ -167,7 +164,6 @@ class ClaudeCodeAgent(Agent):
         description: Optional[str] = None,
         working_dir: Optional[str] = None,
         output_key: str = "implementation_summary",
-        model: Optional[str] = None,
     ):
         """
         Initialize the Claude Code agent.
@@ -182,14 +178,14 @@ class ClaudeCodeAgent(Agent):
             Working directory for the agent
         output_key : str
             State key where the final implementation summary will be stored.
-        model : str, optional
-            Claude model identifier to use.
         """
+        # Get model from environment variable
+        model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929")
         # Pass model to parent Agent class (it has a model field)
         super().__init__(
             name=name,
             description=description or "A coding agent that uses Claude Agent SDK to implement plans",
-            model=model or os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929"),
+            model=model,
         )
         self._working_dir = working_dir
         self._output_key = output_key
@@ -244,8 +240,16 @@ class ClaudeCodeAgent(Agent):
 
             # Get state
             state = ctx.session.state
-            implementation_plan = state.get("implementation_plan", "")
-            implementation_task = state.get("implementation_task", "")
+            current_stage = state.get("current_stage")
+
+            # Format stage information for the prompt
+            if current_stage:
+                stage_info = (
+                    f"Stage {current_stage.get('index', 0) + 1}: {current_stage.get('title', 'Unknown')}\n\n"
+                    f"{current_stage.get('description', '')}"
+                )
+            else:
+                stage_info = ""
 
             # Set up working directory
             setup_working_directory(working_dir)
@@ -259,12 +263,12 @@ class ClaudeCodeAgent(Agent):
             )
 
             # Generate the prompt
-            if implementation_plan:
-                prompt = get_claude_context(implementation_plan=implementation_plan, working_dir=working_dir)
+            if stage_info:
+                prompt = get_claude_context(implementation_plan=stage_info, working_dir=working_dir)
             else:
-                # Try multiple state keys to find the task
+                # Fallback: Try multiple state keys to find the task
                 task_prompt = (
-                    implementation_task
+                    state.get("implementation_task", "")
                     or state.get("original_user_input", "")
                     or state.get("latest_user_input", "")
                     or state.get("user_message", "")

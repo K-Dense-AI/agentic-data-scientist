@@ -13,7 +13,7 @@ class TestClaudeCodeAgent:
         """Test ClaudeCodeAgent default initialization."""
         agent = ClaudeCodeAgent()
         assert agent.name == "claude_coding_agent"
-        assert agent._model == "claude-sonnet-4-5-20250929"
+        assert agent.model == "claude-sonnet-4-5-20250929"
         assert agent._output_key == "implementation_summary"
 
     def test_initialization_custom(self):
@@ -24,13 +24,12 @@ class TestClaudeCodeAgent:
                 description="Custom description",
                 working_dir=tmpdir,
                 output_key="custom_output",
-                model="claude-sonnet-4-5-20250929",
             )
             assert agent.name == "custom_agent"
             assert agent.description == "Custom description"
             assert agent._working_dir == tmpdir
             assert agent._output_key == "custom_output"
-            assert agent._model == "claude-sonnet-4-5-20250929"
+            assert agent.model == "claude-sonnet-4-5-20250929"
 
     def test_truncate_summary_short(self):
         """Test summary truncation with short text."""

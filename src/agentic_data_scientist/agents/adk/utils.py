@@ -66,9 +66,15 @@ REVIEW_MODEL = LiteLlm(
 LANGUAGE_REQUIREMENT = ""
 
 
+# DEPRECATED: Use review_confirmation agents instead
+# This function is kept for backward compatibility but should not be used in new code.
+# Loop exit decisions should be made by dedicated review_confirmation agents with
+# structured output and callbacks, not by direct tool calls from review agents.
 def exit_loop_simple(tool_context: ToolContext):
     """
     Exit the iterative loop when no further changes are needed.
+
+    DEPRECATED: Use review_confirmation agents instead.
 
     This function is called by review agents to signal that the iterative
     process should end.

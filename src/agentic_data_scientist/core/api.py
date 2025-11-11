@@ -42,7 +42,6 @@ class SessionConfig:
     """Configuration for an Agentic Data Scientist session."""
 
     agent_type: str = "adk"  # "adk" or "claude_code"
-    model: Optional[str] = None
     mcp_servers: Optional[List[str]] = None
     max_llm_calls: int = 1024
     session_id: Optional[str] = None
@@ -82,8 +81,6 @@ class DataScientist:
     ----------
     agent_type : str, optional
         Type of agent to use: "adk" or "claude_code" (default: "adk")
-    model : str, optional
-        Model to use for the agent
     mcp_servers : List[str], optional
         List of MCP servers to enable
     """
@@ -91,13 +88,11 @@ class DataScientist:
     def __init__(
         self,
         agent_type: str = "adk",
-        model: Optional[str] = None,
         mcp_servers: Optional[List[str]] = None,
     ):
         """Initialize Agentic Data Scientist core with configuration."""
         self.config = SessionConfig(
             agent_type=agent_type,
-            model=model,
             mcp_servers=mcp_servers,
         )
 
@@ -126,7 +121,6 @@ class DataScientist:
 
             self.agent = create_agent(
                 working_dir=str(self.working_dir),
-                model=self.config.model,
                 mcp_servers=self.config.mcp_servers,
             )
         elif self.config.agent_type == "claude_code":
@@ -134,7 +128,6 @@ class DataScientist:
 
             self.agent = ClaudeCodeAgent(
                 working_dir=str(self.working_dir),
-                model=self.config.model or "claude-sonnet-4-5-20250929",
             )
         else:
             raise ValueError(f"Unknown agent type: {self.config.agent_type}")

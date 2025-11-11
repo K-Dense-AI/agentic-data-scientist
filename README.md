@@ -1,18 +1,18 @@
 # Agentic Data Scientist
 
-**A General-Purpose Multi-Agent Framework**
+**An Adaptive Multi-Agent Framework for Data Science**
 
-Agentic Data Scientist is a streamlined, open-source framework for building and deploying multi-agent AI systems. It provides a clean Python API and CLI for orchestrating complex tasks using Google's Agent Development Kit (ADK) and Claude Code CLI agents.
+Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
 
 ## Features
 
-- 🤖 **Multi-Agent Architecture**: Hierarchical agent orchestration with ADK
-- 💬 **Multiple Agent Types**: Support for ADK agents and Claude Code CLI
+- 🤖 **Adaptive Multi-Agent Workflow**: Iterative planning, execution, validation, and reflection
+- 📋 **Intelligent Planning**: Creates comprehensive analysis plans before starting work
+- 🔄 **Continuous Validation**: Tracks progress against success criteria at every step
+- 🎯 **Self-Correcting**: Reviews and adapts the plan based on discoveries during execution
 - 🔌 **MCP Integration**: Tool access via Model Context Protocol servers
 - 📁 **File Handling**: Simple file upload and management
-- 🔄 **Session Management**: In-memory conversation context
-- 🎯 **Stateless API**: Clean, simple API design
-- 🛠️ **Extensible**: Plugin architecture for custom prompts and agents
+- 🛠️ **Extensible**: Customize prompts, agents, and workflows
 - 📦 **Easy Installation**: Available via pip and uvx
 
 ## Quick Start
@@ -32,17 +32,14 @@ uvx agentic-data-scientist "your query here"
 #### CLI
 
 ```bash
-# Simple query (uses orchestrated mode by default)
-agentic-data-scientist "Explain quantum computing"
+# Analyze data with automatic planning and execution
+agentic-data-scientist "Perform differential expression analysis on this RNA-seq data" --files data.csv
 
-# With file upload
-agentic-data-scientist "Analyze this data" --files data.csv
+# Stream responses to see progress in real-time
+agentic-data-scientist "Analyze customer churn patterns" --files customers.csv --stream
 
-# Simple mode (direct Claude Code without orchestration)
-agentic-data-scientist "Write a Python script" --mode simple
-
-# Stream responses in real-time
-agentic-data-scientist "Complex analysis" --stream
+# Ask questions
+agentic-data-scientist "Explain how gradient boosting works"
 ```
 
 #### Python API
@@ -55,11 +52,11 @@ with DataScientist() as ds:
     result = ds.run("What is machine learning?")
     print(result.response)
 
-# With streaming
+# With file upload and streaming
 async def analyze():
-    async with DataScientist(agent_type="adk") as ds:
+    async with DataScientist() as ds:
         async for event in await ds.run_async(
-            "Analyze this dataset",
+            "Analyze this dataset and identify key trends",
             files=[("data.csv", open("data.csv", "rb").read())],
             stream=True
         ):
@@ -82,48 +79,140 @@ async def chat():
 asyncio.run(chat())
 ```
 
+## How It Works
+
+Agentic Data Scientist uses a multi-phase workflow designed to produce high-quality, reliable results:
+
+### Workflow Design Rationale
+
+**Why separate planning from execution?**
+- Thorough analysis of requirements before starting reduces errors and rework
+- Clear success criteria established upfront ensure all requirements are met
+- Plans can be validated and refined before committing resources to implementation
+
+**Why use iterative refinement?**
+- Multiple review loops catch issues early when they're easier to fix
+- Both plans and implementations are validated before proceeding
+- Continuous feedback improves quality at every step
+
+**Why adapt during execution?**
+- Discoveries during implementation often reveal new requirements
+- Rigid plans can't accommodate unexpected insights or challenges
+- Adaptive replanning ensures the final deliverable meets actual needs
+
+**Why continuous validation?**
+- Success criteria tracking provides objective progress measurement
+- Early detection of issues prevents wasted effort
+- Clear visibility into what's been accomplished and what remains
+
+### The Multi-Agent Workflow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     USER QUERY                              │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+        ┌─────────────▼────────────────┐
+        │   PLANNING PHASE             │
+        │  ┌───────────────────────┐   │
+        │  │ Plan Maker            │◄──┤ Iterative refinement
+        │  │ "What needs to be     │   │ until plan is complete
+        │  │  done?"               │   │ and validated
+        │  └──────────┬────────────┘   │
+        │             │                 │
+        │  ┌──────────▼────────────┐   │
+        │  │ Plan Reviewer         │   │
+        │  │ "Is this complete?"   │───┤
+        │  └──────────┬────────────┘   │
+        │             │                 │
+        │  ┌──────────▼────────────┐   │
+        │  │ Plan Parser           │   │
+        │  │ Structures into       │   │
+        │  │ executable stages     │   │
+        │  └──────────┬────────────┘   │
+        └─────────────┼────────────────┘
+                      │
+        ┌─────────────▼────────────────┐
+        │   EXECUTION PHASE            │
+        │   (Repeated for each stage)  │
+        │                              │
+        │  ┌───────────────────────┐   │
+        │  │ Coding Agent          │   │
+        │  │ Implements the stage  │   │  Stage-by-stage
+        │  │ (uses Claude Code)    │   │  implementation with
+        │  └──────────┬────────────┘   │  continuous validation
+        │             │                 │
+        │  ┌──────────▼────────────┐   │
+        │  │ Review Agent          │◄──┤ Iterates until
+        │  │ "Was this done        │   │ implementation
+        │  │  correctly?"          │───┤ is approved
+        │  └──────────┬────────────┘   │
+        │             │                 │
+        │  ┌──────────▼────────────┐   │
+        │  │ Criteria Checker      │   │
+        │  │ "What have we         │   │
+        │  │  accomplished?"       │   │
+        │  └──────────┬────────────┘   │
+        │             │                 │
+        │  ┌──────────▼────────────┐   │
+        │  │ Stage Reflector       │   │
+        │  │ "What should we do    │   │
+        │  │  next?" Adapts plan   │   │
+        │  └──────────┬────────────┘   │
+        └─────────────┼────────────────┘
+                      │
+        ┌─────────────▼────────────────┐
+        │   SUMMARY PHASE              │
+        │  ┌───────────────────────┐   │
+        │  │ Summary Agent         │   │
+        │  │ Creates comprehensive │   │
+        │  │ final report          │   │
+        │  └───────────────────────┘   │
+        └──────────────────────────────┘
+```
+
+### Agent Roles
+
+Each agent in the workflow has a specific responsibility:
+
+- **Plan Maker**: "What needs to be done?" - Creates comprehensive analysis plans with clear stages and success criteria
+- **Plan Reviewer**: "Is this plan complete?" - Validates that plans address all requirements before execution begins
+- **Plan Parser**: Converts natural language plans into structured, executable stages with trackable success criteria
+- **Stage Orchestrator**: Manages the execution cycle - runs stages one at a time, validates progress, and adapts as needed
+- **Coding Agent**: Does the actual implementation work (powered by Claude Code SDK with access to 380+ scientific Skills)
+- **Review Agent**: "Was this done correctly?" - Validates implementations against requirements before proceeding
+- **Criteria Checker**: "What have we accomplished?" - Objectively tracks progress against success criteria after each stage
+- **Stage Reflector**: "What should we do next?" - Analyzes progress and adapts remaining stages based on what's been learned
+- **Summary Agent**: Synthesizes all work into a comprehensive, publication-ready report
+
 ## Architecture
 
-Agentic Data Scientist uses a layered architecture:
-
 ```
-┌──────────────────────────────────────────┐
-│          CLI / Python API                │
-├──────────────────────────────────────────┤
-│      Agentic Data Scientist Core         │
-│    (Session & Event Management)          │
-├──────────────────────────────────────────┤
-│            Agent Layer                   │
-│  ┌────────────────────────────────────┐ │
-│  │  ADK Orchestration (Planning +     │ │
-│  │  Verification + Implementation)    │ │
-│  │    └─> Claude Code (Implementation)│ │
-│  │                                    │ │
-│  │  Or: Claude Code Direct            │ │
-│  └────────────────────────────────────┘ │
-├──────────────────────────────────────────┤
-│           Tool Layer                     │
-│  • MCP: filesystem (read-only), fetch    │
-│  • Claude Skills: scientific databases   │
-│    and packages (380+ skills)            │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│               CLI / Python API                               │
+├──────────────────────────────────────────────────────────────┤
+│          Agentic Data Scientist Core                         │
+│        (Session & Event Management)                          │
+├──────────────────────────────────────────────────────────────┤
+│               ADK Multi-Agent Workflow                       │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ Planning Loop (Plan Maker → Reviewer → Parser)         │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ Stage Orchestrator                                     │ │
+│  │   ├─> Implementation Loop (Coding → Review)           │ │
+│  │   ├─> Criteria Checker                                │ │
+│  │   └─> Stage Reflector                                 │ │
+│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │ Summary Agent                                          │ │
+│  └────────────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────┤
+│                     Tool Layer                               │
+│  • MCP: filesystem (read-only), fetch                       │
+│  • Claude Skills: 380+ scientific databases and packages    │
+└──────────────────────────────────────────────────────────────┘
 ```
-
-### Agent Types
-
-**ADK Agent** (`agent_type="adk"`)
-- Multi-agent orchestration with planning and verification
-- Uses Claude Code for implementation tasks
-- Access to MCP tools: filesystem (read-only), fetch
-- Best for: Complex multi-step tasks requiring planning
-
-**Claude Code Agent** (`agent_type="claude_code"`)
-- Direct Claude Sonnet 4.5 integration
-- Code execution and development capabilities
-- Access to 380+ scientific Skills (databases and packages)
-- Skills auto-loaded from cloned repository at startup
-- Streaming execution support
-- Best for: Direct coding, scripting, and development tasks
 
 ## Configuration
 
@@ -146,67 +235,73 @@ MCP_FILESYSTEM_ROOT=/path/to/your/data
 
 ### Tools & Skills
 
-Agentic Data Scientist provides tools through two mechanisms:
-
-**MCP Servers** (for ADK agents):
-- **filesystem**: Read-only file operations
-  - Allowed: read_file, list_directory, search_files, get_file_info
-  - Blocked: write_file, delete_file, edit_file (for security)
+**MCP Servers** (used by planning and review agents):
+- **filesystem**: Read-only file operations (read_file, list_directory, search_files, get_file_info)
 - **fetch**: Web content fetching and HTTP requests
 
-**Claude Skills** (for Claude Code agents):
-- **Scientific Skills**: 380+ skills automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
-  - Scientific databases (UniProt, PubChem, PDB, etc.)
-  - Scientific packages (BioPython, RDKit, MDAnalysis, etc.)
+**Claude Skills** (used by coding agent):
+- **380+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+  - Scientific databases: UniProt, PubChem, PDB, KEGG, PubMed, and more
+  - Scientific packages: BioPython, RDKit, PyDESeq2, scanpy, and more
   - Auto-cloned to `.claude/skills/` at agent startup
-  - Agent discovers and uses skills autonomously
 
 See [docs/mcp_configuration.md](docs/mcp_configuration.md) for detailed configuration.
 
 ## Documentation
 
-- [Getting Started Guide](docs/getting_started.md)
-- [API Reference](docs/api_reference.md)
-- [MCP Configuration](docs/mcp_configuration.md)
-- [Extending Agentic Data Scientist](docs/extending.md)
+- [Getting Started Guide](docs/getting_started.md) - Learn how the workflow operates step by step
+- [API Reference](docs/api_reference.md) - Complete API documentation
+- [MCP Configuration](docs/mcp_configuration.md) - Configure MCP servers and tools
+- [Extending](docs/extending.md) - Customize prompts, agents, and workflows
 
 ## Examples
 
-The [examples/](examples/) directory contains practical, working examples:
-
-### Quick Examples
+The [examples/](examples/) directory contains practical examples:
 
 **Basic Usage** (`examples/basic_usage.py`)
 ```python
 from agentic_data_scientist import DataScientist
 
-with DataScientist(agent_type="adk") as ds:
+with DataScientist() as ds:
     result = ds.run("What is machine learning?")
     print(result.response)
 ```
 
 **Streaming** (`examples/streaming_example.py`)
 ```python
-async with DataScientist(agent_type="adk") as ds:
-    async for event in await ds.run_async("Complex task", stream=True):
+async with DataScientist() as ds:
+    async for event in await ds.run_async("Analyze this data", stream=True):
         if event['type'] == 'message':
             print(f"[{event['author']}] {event['content']}")
 ```
 
-**Multi-turn Conversation** (`examples/multi_turn_conversation.py`)
-```python
-async with DataScientist() as ds:
-    context = {}
-    result1 = await ds.run_async("What is Python?", context=context)
-    result2 = await ds.run_async("Give me an example", context=context)
-```
-
-Run any example with:
+Run examples with:
 ```bash
 uv run python examples/basic_usage.py
 ```
 
-See [examples/README.md](examples/README.md) for detailed information.
+See [examples/README.md](examples/README.md) for more information.
+
+## Advanced Usage
+
+### Direct Mode (Without Multi-Agent Orchestration)
+
+For simple scripting tasks that don't require planning and validation, you can use direct mode:
+
+```python
+from agentic_data_scientist import DataScientist
+
+with DataScientist(agent_type="claude_code") as ds:
+    result = ds.run("Write a Python script to parse CSV files")
+    print(result.response)
+```
+
+Or via CLI:
+```bash
+agentic-data-scientist "Write a Python script" --mode simple
+```
+
+**Note**: Direct mode bypasses the planning and validation workflow, making it suitable only for straightforward coding tasks where you don't need adaptive planning or progress validation.
 
 ## Development
 
@@ -237,16 +332,19 @@ agentic-data-scientist/
 ├── src/agentic_data_scientist/
 │   ├── core/           # Core API and session management
 │   ├── agents/         # Agent implementations
-│   │   ├── adk/        # ADK agent system (orchestration + planning)
-│   │   └── claude_code/# Claude Code agent (implementation)
+│   │   ├── adk/        # ADK multi-agent workflow
+│   │   │   ├── agent.py              # Agent factory
+│   │   │   ├── stage_orchestrator.py # Stage-by-stage execution
+│   │   │   ├── implementation_loop.py# Coding + review loop
+│   │   │   ├── loop_detection.py     # Loop detection agent
+│   │   │   └── review_confirmation.py# Review decision logic
+│   │   └── claude_code/# Claude Code integration
 │   ├── prompts/        # Prompt templates
-│   │   ├── base/       # General prompts
+│   │   ├── base/       # Agent role prompts
 │   │   └── domain/     # Domain-specific prompts
-│   ├── mcp/            # MCP integration (filesystem, fetch, claude-scientific-skills)
+│   ├── mcp/            # MCP integration
 │   └── cli/            # CLI interface
 ├── tests/              # Test suite
-│   ├── unit/          # Unit tests
-│   └── integration/   # Integration tests
 ├── examples/           # Usage examples
 └── docs/               # Documentation
 ```
@@ -255,7 +353,7 @@ agentic-data-scientist/
 
 - Python 3.11+
 - Node.js (for MCP servers)
-- API keys for Google AI and/or Anthropic
+- API keys for Google AI and Anthropic
 
 ## Contributing
 
@@ -286,4 +384,3 @@ Built with:
 ---
 
 Made with ❤️ by the K-Dense AI Team
-

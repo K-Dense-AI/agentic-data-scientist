@@ -6,14 +6,13 @@ Complete API reference for Agentic Data Scientist.
 
 ### `DataScientist`
 
-Main class for interacting with Agentic Data Scientist agents.
+Main class for interacting with the Agentic Data Scientist multi-agent workflow.
 
 ```python
 from agentic_data_scientist import DataScientist
 
 ds = DataScientist(
-    agent_type="adk",           # "adk" or "claude_code"
-    model=None,                  # Optional: specific model to use
+    agent_type="adk",           # "adk" (recommended) or "claude_code" (direct mode)
     mcp_servers=None,           # Optional: list of MCP servers
 )
 ```
@@ -21,14 +20,16 @@ ds = DataScientist(
 #### Parameters
 
 - **agent_type** (str, default="adk"): Type of agent to use
-  - `"adk"`: Multi-agent system with planning, orchestration, and Claude Code implementation
-  - `"claude_code"`: Direct Claude Code agent for coding tasks
+  - `"adk"`: **(Recommended)** Full multi-agent workflow with planning, validation, and adaptive execution
+  - `"claude_code"`: Direct mode - bypasses workflow for simple scripting tasks
   
-- **model** (str, optional): Specific model to use. Defaults:
-  - ADK: `google/gemini-2.5-pro`
-  - Claude Code: `claude-sonnet-4-5-20250929`
-  
-- **mcp_servers** (list, optional): List of MCP servers to enable (ADK only)
+- **mcp_servers** (list, optional): List of MCP servers to enable
+
+**Note**: The multi-agent ADK workflow (`agent_type="adk"`) is the primary mode and recommended for most use cases. Direct mode is only for simple tasks that don't benefit from planning and validation.
+
+**Model Configuration**: Models are configured via environment variables:
+  - ADK agents: `DEFAULT_MODEL` (default: `google/gemini-2.5-pro`)
+  - Coding agent: `CODING_MODEL` (default: `claude-sonnet-4-5-20250929`)
 
 #### Attributes
 
@@ -40,7 +41,7 @@ ds = DataScientist(
 
 ##### `run(message, files=None, **kwargs) -> Result`
 
-Synchronous method to run a query.
+Synchronous method to run a query through the workflow.
 
 **Parameters:**
 - **message** (str): The user's query or instruction
@@ -53,44 +54,48 @@ Synchronous method to run a query.
 **Example:**
 ```python
 with DataScientist() as ds:
-    result = ds.run("What is Python?")
+    result = ds.run("Analyze trends in this data", files=[("data.csv", data)])
     print(result.response)
-    print(result.status)  # "completed" or "error"
+    print(f"Status: {result.status}")  # "completed" or "error"
 ```
 
 ##### `run_async(message, files=None, stream=False, context=None) -> Union[Result, AsyncGenerator]`
 
-Asynchronous method to run a query.
+Asynchronous method to run a query through the workflow.
 
 **Parameters:**
 - **message** (str): The user's query or instruction
 - **files** (list[tuple], optional): List of (filename, content) tuples
-- **stream** (bool, default=False): If True, returns an async generator for streaming
+- **stream** (bool, default=False): If True, returns an async generator for streaming events
 - **context** (dict, optional): Conversation context for multi-turn interactions
 
 **Returns:**
 - If stream=False: Result object
 - If stream=True: AsyncGenerator yielding event dictionaries
 
-**Example:**
+**Example (non-streaming):**
 ```python
 import asyncio
 
 async def main():
     async with DataScientist() as ds:
-        result = await ds.run_async("Explain quantum computing")
+        result = await ds.run_async("Explain gradient boosting")
         print(result.response)
 
 asyncio.run(main())
 ```
 
-**Streaming Example:**
+**Example (streaming):**
 ```python
 async def stream_example():
     async with DataScientist() as ds:
-        async for event in await ds.run_async("Complex task", stream=True):
+        async for event in await ds.run_async(
+            "Analyze this dataset",
+            files=[("data.csv", data)],
+            stream=True
+        ):
             if event['type'] == 'message':
-                print(event['content'])
+                print(f"[{event['author']}] {event['content']}")
 
 asyncio.run(stream_example())
 ```
@@ -131,7 +136,6 @@ from agentic_data_scientist.core.api import SessionConfig
 
 config = SessionConfig(
     agent_type="adk",
-    model="google/gemini-2.5-pro",
     mcp_servers=["filesystem", "fetch"],
     max_llm_calls=1024,
     session_id=None,
@@ -142,15 +146,16 @@ config = SessionConfig(
 #### Attributes
 
 - **agent_type** (str): "adk" or "claude_code"
-- **model** (str, optional): Model to use
 - **mcp_servers** (list, optional): List of MCP servers
 - **max_llm_calls** (int): Maximum LLM calls per session
 - **session_id** (str, optional): Custom session ID
 - **working_dir** (str, optional): Custom working directory
 
+**Note**: Models are configured via environment variables, not in the SessionConfig.
+
 ### `Result`
 
-Result from running an agent.
+Result from running the workflow.
 
 ```python
 result = ds.run("Query")
@@ -179,32 +184,67 @@ file_info = FileInfo(
 
 ## Event System
 
-When using streaming mode, events are emitted as dictionaries.
+When using streaming mode (`stream=True`), the workflow emits events as it progresses.
+
+### Workflow Event Flow
+
+For the ADK multi-agent workflow, you'll see events in roughly this order:
+
+```
+Planning Phase:
+  plan_maker_agent → plan_reviewer_agent → plan_review_confirmation_agent →
+  high_level_plan_parser
+
+Execution Phase (repeated for each stage):
+  stage_orchestrator → coding_agent → review_agent →
+  implementation_review_confirmation_agent → success_criteria_checker →
+  stage_reflector
+
+Summary Phase:
+  summary_agent
+```
 
 ### Event Types
 
 #### MessageEvent
 
+Regular text output from agents.
+
 ```python
 {
     'type': 'message',
     'content': 'Text content',
-    'author': 'agent_name',
+    'author': 'plan_maker_agent',  # Which agent produced this
     'timestamp': '12:34:56.789',
-    'is_thought': False,
-    'is_partial': False,
+    'is_thought': False,             # Internal reasoning vs. output
+    'is_partial': False,             # Streaming chunk vs. complete
     'event_number': 1
 }
 ```
 
+**Common Authors in Workflow:**
+- `plan_maker_agent`: Creating the analysis plan
+- `plan_reviewer_agent`: Reviewing the plan
+- `plan_review_confirmation_agent`: Deciding if plan is approved
+- `high_level_plan_parser`: Structuring the plan
+- `stage_orchestrator`: Managing stage execution
+- `coding_agent`: Implementing each stage
+- `review_agent`: Reviewing implementation
+- `implementation_review_confirmation_agent`: Deciding if implementation is approved
+- `success_criteria_checker`: Updating progress
+- `stage_reflector`: Adapting remaining stages
+- `summary_agent`: Creating final report
+
 #### FunctionCallEvent
+
+Agent is using a tool.
 
 ```python
 {
     'type': 'function_call',
-    'name': 'tool_name',
-    'arguments': {'arg1': 'value1'},
-    'author': 'agent_name',
+    'name': 'read_file',
+    'arguments': {'path': 'data.csv'},
+    'author': 'review_agent',
     'timestamp': '12:34:56.789',
     'event_number': 2
 }
@@ -212,12 +252,14 @@ When using streaming mode, events are emitted as dictionaries.
 
 #### FunctionResponseEvent
 
+Tool returned a result.
+
 ```python
 {
     'type': 'function_response',
-    'name': 'tool_name',
-    'response': {'result': 'success'},
-    'author': 'agent_name',
+    'name': 'read_file',
+    'response': {'content': '...file contents...'},
+    'author': 'review_agent',
     'timestamp': '12:34:56.789',
     'event_number': 3
 }
@@ -225,13 +267,15 @@ When using streaming mode, events are emitted as dictionaries.
 
 #### UsageEvent
 
+Token usage information.
+
 ```python
 {
     'type': 'usage',
     'usage': {
-        'total_input_tokens': 100,
-        'cached_input_tokens': 20,
-        'output_tokens': 50
+        'total_input_tokens': 1500,
+        'cached_input_tokens': 200,
+        'output_tokens': 500
     },
     'timestamp': '12:34:56.789'
 }
@@ -239,26 +283,130 @@ When using streaming mode, events are emitted as dictionaries.
 
 #### ErrorEvent
 
+An error occurred during execution.
+
 ```python
 {
     'type': 'error',
-    'content': 'Error message',
+    'content': 'Error message describing what went wrong',
     'timestamp': '12:34:56.789'
 }
 ```
 
 #### CompletedEvent
 
+Workflow finished successfully.
+
 ```python
 {
     'type': 'completed',
     'session_id': 'session_123',
-    'duration': 1.5,
-    'total_events': 10,
-    'files_created': ['output.txt'],
-    'files_count': 1,
+    'duration': 45.2,
+    'total_events': 150,
+    'files_created': ['results.csv', 'plot.png', 'summary.md'],
+    'files_count': 3,
     'timestamp': '12:34:56.789'
 }
+```
+
+### Workflow-Specific Events
+
+#### Stage Transition Events
+
+When the orchestrator moves between stages:
+
+```python
+{
+    'type': 'message',
+    'author': 'stage_orchestrator',
+    'content': '### Stage 2: Data Preprocessing\n\nBeginning implementation...',
+    # ...
+}
+```
+
+#### Criteria Update Events
+
+After the criteria checker runs:
+
+```python
+{
+    'type': 'message',
+    'author': 'success_criteria_checker',
+    'content': '{...JSON with criteria updates...}',
+    # The checker outputs structured JSON
+}
+```
+
+#### Planning Loop Events
+
+During iterative plan refinement:
+
+```python
+# Plan created
+{'author': 'plan_maker_agent', 'content': '### Analysis Stages:\n1. ...'}
+
+# Review feedback
+{'author': 'plan_reviewer_agent', 'content': 'This plan looks good...'}
+
+# Decision
+{'author': 'plan_review_confirmation_agent', 'content': '{"exit": true, "reason": "..."}'}
+```
+
+### Example: Processing Events
+
+```python
+async def process_workflow_events(ds, query):
+    """Track workflow progress through events."""
+    
+    current_phase = None
+    current_stage = None
+    
+    async for event in await ds.run_async(query, stream=True):
+        event_type = event.get('type')
+        author = event.get('author', '')
+        
+        # Track workflow phase
+        if 'plan_maker' in author:
+            if current_phase != 'planning':
+                current_phase = 'planning'
+                print("\n=== PLANNING PHASE ===")
+        elif 'stage_orchestrator' in author:
+            if current_phase != 'execution':
+                current_phase = 'execution'
+                print("\n=== EXECUTION PHASE ===")
+        elif 'summary' in author:
+            if current_phase != 'summary':
+                current_phase = 'summary'
+                print("\n=== SUMMARY PHASE ===")
+        
+        # Handle different event types
+        if event_type == 'message':
+            content = event['content']
+            
+            # Track stage transitions
+            if 'Stage' in content and 'Beginning implementation' in content:
+                print(f"\n→ Starting new stage")
+            
+            print(f"[{author}] {content[:100]}...")
+            
+        elif event_type == 'function_call':
+            tool_name = event['name']
+            print(f"  → Using tool: {tool_name}")
+            
+        elif event_type == 'usage':
+            usage = event['usage']
+            print(f"  📊 Tokens: {usage.get('total_input_tokens', 0)} in, "
+                  f"{usage.get('output_tokens', 0)} out")
+            
+        elif event_type == 'error':
+            error_msg = event['content']
+            print(f"  ❌ Error: {error_msg}")
+            
+        elif event_type == 'completed':
+            duration = event['duration']
+            files = event['files_created']
+            print(f"\n✓ Completed in {duration:.1f}s")
+            print(f"✓ Created {len(files)} files: {', '.join(files)}")
 ```
 
 ## CLI Reference
@@ -271,46 +419,46 @@ agentic-data-scientist [OPTIONS] QUERY
 
 ### Options
 
-- **--mode**: Execution mode, default: `orchestrated`
-  - `orchestrated`: Full multi-agent system with planning and verification
-  - `simple`: Direct Claude Code execution
+- **--mode**: Execution mode (default: `orchestrated`)
+  - `orchestrated`: Full multi-agent workflow (default, recommended)
+  - `simple`: Direct mode without planning/validation
 - **--files, -f**: Files to upload (can be specified multiple times)
-- **--stream**: Enable streaming output
+- **--stream**: Enable streaming output to see progress
 - **--verbose, -v**: Enable verbose logging
 - **--help**: Show help message
 
 ### Examples
 
 ```bash
-# Simple query (orchestrated mode by default)
-agentic-data-scientist "What is Python?"
+# Default: full multi-agent workflow
+agentic-data-scientist "Analyze customer churn patterns" --files customers.csv
 
-# With file upload
-agentic-data-scientist "Analyze this data" --files data.csv
+# Stream to watch progress
+agentic-data-scientist "Perform statistical analysis" --files data.csv --stream
 
-# Use simple mode (direct Claude Code)
-agentic-data-scientist "Write a script" --mode simple
+# Multiple files
+agentic-data-scientist "Compare these datasets" --files data1.csv --files data2.csv
 
-# Stream output
-agentic-data-scientist "Complex task" --stream
+# Direct mode (simple tasks only)
+agentic-data-scientist "Write a Python script to parse JSON" --mode simple
 
 # Verbose logging
-agentic-data-scientist "Debug this" --verbose
+agentic-data-scientist "Complex task" --verbose --stream
 ```
 
 ## Environment Variables
 
 ### Required
 
-- **ANTHROPIC_API_KEY**: Anthropic API key for Claude Code agent
-- **GOOGLE_API_KEY**: Google API key for ADK agents (optional)
+- **ANTHROPIC_API_KEY**: Anthropic API key for Claude (coding agent)
+- **GOOGLE_API_KEY**: Google API key for Gemini models (planning/review agents)
 
 ### Optional
 
-- **DEFAULT_MODEL**: Default model for ADK agents (default: `google/gemini-2.5-pro`)
-- **CODING_MODEL**: Model for Claude Code agent (default: `claude-sonnet-4-5-20250929`)
+- **DEFAULT_MODEL**: Model for planning and review agents (default: `google/gemini-2.5-pro`)
+- **CODING_MODEL**: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
 - **MCP_FILESYSTEM_ROOT**: Root directory for filesystem MCP (default: `/tmp`)
-- **CLAUDE_SCIENTIFIC_SKILLS_URL**: URL for claude-scientific-skills MCP (default: `https://mcp.k-dense.ai/claude-scientific-skills/mcp`)
+- **CLAUDE_SCIENTIFIC_SKILLS_URL**: URL for claude-scientific-skills MCP
 
 ## Error Handling
 
@@ -322,8 +470,10 @@ with DataScientist() as ds:
     
     if result.status == "error":
         print(f"Error occurred: {result.error}")
+        # Handle error appropriately
     else:
         print(f"Success: {result.response}")
+        print(f"Created files: {result.files_created}")
 ```
 
 ## Best Practices
@@ -341,7 +491,7 @@ with DataScientist() as ds:
        # Process result
    ```
 
-3. **Use streaming for long tasks**:
+3. **Use streaming for long tasks** to monitor progress:
    ```python
    async for event in await ds.run_async("Task", stream=True):
        # Process events in real-time
@@ -354,9 +504,22 @@ with DataScientist() as ds:
    result2 = await ds.run_async("Follow-up", context=context)
    ```
 
+5. **Use ADK workflow for complex tasks**:
+   ```python
+   # Recommended for most use cases
+   with DataScientist(agent_type="adk") as ds:
+       result = ds.run("Complex analysis task")
+   ```
+
+6. **Reserve direct mode for simple tasks**:
+   ```python
+   # Only for straightforward scripting
+   with DataScientist(agent_type="claude_code") as ds:
+       result = ds.run("Write a simple function")
+   ```
+
 ## See Also
 
-- [Getting Started Guide](getting_started.md)
-- [MCP Configuration](mcp_configuration.md)
-- [Extending Guide](extending.md)
-
+- [Getting Started Guide](getting_started.md) - Learn the workflow
+- [MCP Configuration](mcp_configuration.md) - Configure tools
+- [Extending Guide](extending.md) - Customize agents and prompts

@@ -6,23 +6,26 @@ implementation, and verification agents.
 """
 
 import logging
+import warnings
 from pathlib import Path
 from typing import AsyncGenerator, List, Optional
 
 from dotenv import load_dotenv
 from google.adk.agents import InvocationContext, LoopAgent, SequentialAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.events import Event
 from google.adk.planners import BuiltInPlanner
 from google.adk.utils.context_utils import Aclosing
 from google.genai import types
+from pydantic import BaseModel, Field
 from typing_extensions import override
 
 from agentic_data_scientist.agents.adk.implementation_loop import make_implementation_agents
 from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
+from agentic_data_scientist.agents.adk.review_confirmation import create_review_confirmation_agent
 from agentic_data_scientist.agents.adk.utils import (
     DEFAULT_MODEL,
     REVIEW_MODEL,
-    exit_loop_simple,
     get_generate_content_config,
 )
 from agentic_data_scientist.prompts import load_prompt
@@ -32,6 +35,332 @@ from agentic_data_scientist.prompts import load_prompt
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Suppress experimental feature warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="google.adk.tools.mcp_tool")
+
+# Suppress verbose JSON Schema conversion logs
+logging.getLogger("google_genai.types").setLevel(logging.WARNING)
+
+
+# ========================= Output Schemas (Pydantic BaseModel) =========================
+
+
+class Stage(BaseModel):
+    """A high-level implementation stage."""
+
+    title: str = Field(description="Stage title")
+    description: str = Field(description="Detailed stage description")
+
+
+class SuccessCriterion(BaseModel):
+    """A success criterion for completion."""
+
+    criteria: str = Field(description="Success criterion description")
+
+
+class PlanParserOutput(BaseModel):
+    """Parsed high-level plan into stages and success criteria."""
+
+    stages: List[Stage] = Field(description="List of high-level stages to implement progressively")
+    success_criteria: List[SuccessCriterion] = Field(description="Definitive checklist for overall analysis completion")
+
+
+class CriteriaUpdate(BaseModel):
+    """Update for a specific success criterion."""
+
+    index: int = Field(description="Criterion index")
+    met: bool = Field(description="Whether criterion is met")
+    evidence: str = Field(description="Evidence or reason for the status (file paths, metrics, etc.)")
+
+
+class CriteriaCheckerOutput(BaseModel):
+    """Updated success criteria status."""
+
+    criteria_updates: List[CriteriaUpdate] = Field(description="List of criteria with updated met status and evidence")
+
+
+class StageModification(BaseModel):
+    """Modification to an existing stage."""
+
+    index: int = Field(description="Stage index to modify")
+    new_description: str = Field(description="Updated stage description (or empty if no change)")
+
+
+class NewStage(BaseModel):
+    """A new stage to add."""
+
+    title: str = Field(description="New stage title")
+    description: str = Field(description="New stage description")
+
+
+class StageReflectorOutput(BaseModel):
+    """Reflection on remaining stages with optional modifications."""
+
+    stage_modifications: List[StageModification] = Field(description="Modifications to existing uncompleted stages")
+    new_stages: List[NewStage] = Field(description="New stages to add to the end of the stage list")
+
+
+# Keep for backwards compatibility
+PLAN_PARSER_OUTPUT_SCHEMA = PlanParserOutput
+CRITERIA_CHECKER_OUTPUT_SCHEMA = CriteriaCheckerOutput
+STAGE_REFLECTOR_OUTPUT_SCHEMA = StageReflectorOutput
+
+
+# ========================= Callbacks =========================
+
+
+def plan_parser_callback(callback_context: CallbackContext):
+    """
+    Transform parsed output into structured stage/criteria lists.
+
+    This callback processes the plan parser output and initializes
+    high_level_stages and high_level_success_criteria with proper tracking fields.
+
+    Parameters
+    ----------
+    callback_context : CallbackContext
+        The callback context with invocation context access
+    """
+
+    ctx = callback_context._invocation_context
+    state = ctx.session.state
+
+    # Get the output from the agent
+    parsed_output = state.get("parsed_plan_output")
+
+    if not parsed_output:
+        logger.error("[PlanParser] No parsed output found in state")
+        return
+
+    # Validate structure
+    if not isinstance(parsed_output, dict):
+        logger.error(f"[PlanParser] Invalid parsed output type: {type(parsed_output)}")
+        return
+
+    stages_data = parsed_output.get("stages", [])
+    criteria_data = parsed_output.get("success_criteria", [])
+
+    if not isinstance(stages_data, list):
+        logger.error(f"[PlanParser] stages is not a list: {type(stages_data)}")
+        return
+
+    if not isinstance(criteria_data, list):
+        logger.error(f"[PlanParser] success_criteria is not a list: {type(criteria_data)}")
+        return
+
+    logger.info("[PlanParser] Processing parsed plan output")
+
+    # Initialize stages with tracking fields
+    stages = []
+    for idx, stage in enumerate(stages_data):
+        # Validate stage structure
+        if not isinstance(stage, dict) or "title" not in stage or "description" not in stage:
+            logger.error(f"[PlanParser] Invalid stage structure at index {idx}: {stage}")
+            continue
+
+        stages.append(
+            {
+                "index": idx,
+                "title": stage["title"],
+                "description": stage["description"],
+                "completed": False,
+                "implementation_result": None,
+            }
+        )
+
+    # Initialize criteria with tracking fields
+    criteria = []
+    for idx, crit in enumerate(criteria_data):
+        # Validate criterion structure
+        if not isinstance(crit, dict) or "criteria" not in crit:
+            logger.error(f"[PlanParser] Invalid criterion structure at index {idx}: {crit}")
+            continue
+
+        criteria.append(
+            {
+                "index": idx,
+                "criteria": crit["criteria"],
+                "met": False,
+                "evidence": None,
+            }
+        )
+
+    # Only update state if we have valid stages and criteria
+    if not stages:
+        logger.error("[PlanParser] No valid stages after parsing - not updating state")
+        return
+
+    if not criteria:
+        logger.error("[PlanParser] No valid criteria after parsing - not updating state")
+        return
+
+    state["high_level_stages"] = stages
+    state["high_level_success_criteria"] = criteria
+    state["current_stage_index"] = 0
+
+    logger.info(f"[PlanParser] Initialized {len(stages)} stages and {len(criteria)} criteria")
+
+
+def criteria_checker_callback(callback_context: CallbackContext):
+    """
+    Update criteria met status based on checker output.
+
+    This callback updates the high_level_success_criteria in state based on
+    the criteria checker's assessment.
+
+    Parameters
+    ----------
+    callback_context : CallbackContext
+        The callback context with invocation context access
+    """
+
+    ctx = callback_context._invocation_context
+    state = ctx.session.state
+
+    criteria_output = state.get("criteria_checker_output")
+    criteria = state.get("high_level_success_criteria", [])
+
+    if not criteria_output:
+        logger.error("[CriteriaChecker] No output found in state")
+        return
+
+    if not isinstance(criteria_output, dict) or "criteria_updates" not in criteria_output:
+        logger.error("[CriteriaChecker] Invalid output structure")
+        return
+
+    updates = criteria_output["criteria_updates"]
+    if not isinstance(updates, list):
+        logger.error(f"[CriteriaChecker] criteria_updates is not a list: {type(updates)}")
+        return
+
+    logger.info("[CriteriaChecker] Updating criteria status")
+
+    valid_updates = 0
+    invalid_updates = 0
+
+    for update in updates:
+        # Validate update structure
+        if not isinstance(update, dict):
+            logger.warning(f"[CriteriaChecker] Invalid update structure (not dict): {update}")
+            invalid_updates += 1
+            continue
+
+        if "index" not in update or "met" not in update or "evidence" not in update:
+            logger.warning(f"[CriteriaChecker] Invalid update structure (missing fields): {update}")
+            invalid_updates += 1
+            continue
+
+        idx = update["index"]
+        if 0 <= idx < len(criteria):
+            criteria[idx]["met"] = update["met"]
+            criteria[idx]["evidence"] = update["evidence"]
+            valid_updates += 1
+
+            status = "✅ MET" if update["met"] else "❌ NOT MET"
+            logger.info(f"[CriteriaChecker] Criterion {idx}: {status}")
+        else:
+            logger.warning(f"[CriteriaChecker] Invalid criterion index: {idx}")
+            invalid_updates += 1
+
+    if valid_updates == 0:
+        logger.error("[CriteriaChecker] No valid updates processed")
+    elif invalid_updates > len(criteria) // 2:
+        # More than half of updates are invalid
+        logger.error(
+            f"[CriteriaChecker] Too many invalid updates ({invalid_updates}/{len(updates)}) - "
+            "criteria check may be unreliable"
+        )
+
+    state["high_level_success_criteria"] = criteria
+
+
+def stage_reflector_callback(callback_context: CallbackContext):
+    """
+    Apply stage modifications and add new stages.
+
+    This callback updates the high_level_stages in state based on the
+    stage reflector's recommendations.
+
+    Parameters
+    ----------
+    callback_context : CallbackContext
+        The callback context with invocation context access
+    """
+
+    ctx = callback_context._invocation_context
+    state = ctx.session.state
+
+    reflector_output = state.get("stage_reflector_output")
+    stages = state.get("high_level_stages", [])
+
+    if not reflector_output:
+        logger.error("[StageReflector] No output found in state")
+        return
+
+    if not isinstance(reflector_output, dict):
+        logger.error(f"[StageReflector] Invalid output type: {type(reflector_output)}")
+        return
+
+    logger.info("[StageReflector] Processing stage reflections")
+
+    # Apply modifications to existing stages
+    modifications = reflector_output.get("stage_modifications", [])
+    if not isinstance(modifications, list):
+        logger.error(f"[StageReflector] stage_modifications is not a list: {type(modifications)}")
+        modifications = []
+
+    for mod in modifications:
+        if not isinstance(mod, dict):
+            logger.warning(f"[StageReflector] Invalid modification structure: {mod}")
+            continue
+
+        if "index" not in mod or "new_description" not in mod:
+            logger.warning(f"[StageReflector] Missing fields in modification: {mod}")
+            continue
+
+        idx = mod["index"]
+        new_desc = mod.get("new_description", "")
+
+        if 0 <= idx < len(stages) and new_desc:
+            # Check if stage is completed - don't modify completed stages
+            if stages[idx].get("completed", False):
+                logger.warning(f"[StageReflector] Cannot modify completed stage {idx} - ignoring")
+                continue
+
+            stages[idx]["description"] = new_desc
+            logger.info(f"[StageReflector] Modified stage {idx} description")
+        elif new_desc:
+            logger.warning(f"[StageReflector] Invalid stage index for modification: {idx}")
+
+    # Add new stages
+    new_stages = reflector_output.get("new_stages", [])
+    if not isinstance(new_stages, list):
+        logger.error(f"[StageReflector] new_stages is not a list: {type(new_stages)}")
+        new_stages = []
+
+    for new_stage in new_stages:
+        if not isinstance(new_stage, dict):
+            logger.warning(f"[StageReflector] Invalid new stage structure: {new_stage}")
+            continue
+
+        if "title" not in new_stage or "description" not in new_stage:
+            logger.warning(f"[StageReflector] Missing fields in new stage: {new_stage}")
+            continue
+
+        new_idx = len(stages)
+        stages.append(
+            {
+                "index": new_idx,
+                "title": new_stage["title"],
+                "description": new_stage["description"],
+                "completed": False,
+                "implementation_result": None,
+            }
+        )
+        logger.info(f"[StageReflector] Added new stage {new_idx}: {new_stage['title']}")
+
+    state["high_level_stages"] = stages
 
 
 class NonEscalatingLoopAgent(LoopAgent):
@@ -60,7 +389,6 @@ class NonEscalatingLoopAgent(LoopAgent):
 
 def create_agent(
     working_dir: Optional[str] = None,
-    model: Optional[str] = None,
     mcp_servers: Optional[List[str]] = None,
 ) -> LoopDetectionAgent:
     """
@@ -70,8 +398,6 @@ def create_agent(
     ----------
     working_dir : str, optional
         Working directory for the session
-    model : str, optional
-        Model to use for the agents
     mcp_servers : List[str], optional
         List of MCP servers to enable for tools
 
@@ -104,75 +430,16 @@ def create_agent(
 
     # ------------------------- Implementation Loop -------------------------
 
-    coding_agent, review_agent = make_implementation_agents(str(working_dir), mcp_toolsets)
+    coding_agent, review_agent, review_confirmation = make_implementation_agents(
+        str(working_dir), mcp_toolsets
+    )
 
     # LoopAgent wrapper for implementation
     implementation_loop = NonEscalatingLoopAgent(
         name="implementation_loop",
-        description="Implements tasks through iterative coding and review cycles.",
-        sub_agents=[coding_agent, review_agent],
-        max_iterations=10,
-    )
-
-    # ------------------------- Plan Orchestrator -------------------------
-
-    logger.info("[AgenticDS] Loading plan_orchestrator prompt")
-    plan_orchestrator_instructions = load_prompt("plan_orchestrator")
-
-    logger.info(f"[AgenticDS] Creating plan_orchestrator with model={model or DEFAULT_MODEL}")
-
-    plan_orchestrator = LoopDetectionAgent(
-        name="plan_orchestrator",
-        model=model or DEFAULT_MODEL,
-        description="Orchestrates the implementation of multi-step plans.",
-        instruction=plan_orchestrator_instructions,
-        tools=mcp_toolsets + [exit_loop_simple],
-        planner=BuiltInPlanner(
-            thinking_config=types.ThinkingConfig(
-                include_thoughts=True,
-                thinking_budget=-1,
-            ),
-        ),
-        generate_content_config=get_generate_content_config(temperature=0.5),
-        output_key="implementation_task",
-    )
-
-    plan_orchestrator_loop = NonEscalatingLoopAgent(
-        name="plan_orchestrator_loop",
-        description="Orchestrates implementation through multiple iterations.",
-        sub_agents=[plan_orchestrator, implementation_loop],
-        max_iterations=10,
-    )
-
-    # ------------------------- Plan Verifier -------------------------
-
-    logger.info("[AgenticDS] Loading plan_verifier prompt")
-    plan_verifier_instructions = load_prompt("plan_verifier")
-
-    logger.info(f"[AgenticDS] Creating plan_verifier with model={REVIEW_MODEL}")
-
-    plan_verifier = LoopDetectionAgent(
-        name="plan_verifier",
-        model=REVIEW_MODEL,
-        description="Verifies that implementation meets success criteria.",
-        instruction=plan_verifier_instructions,
-        tools=mcp_toolsets + [exit_loop_simple],
-        planner=BuiltInPlanner(
-            thinking_config=types.ThinkingConfig(
-                include_thoughts=True,
-                thinking_budget=-1,
-            ),
-        ),
-        output_key="plan_verdict",
-        include_contents='none',
-    )
-
-    # LoopAgent wrapper for planning
-    planning_loop = LoopAgent(
-        name="planning_loop",
-        description="Carries out plans until verification succeeds.",
-        sub_agents=[plan_orchestrator_loop, plan_verifier],
-        max_iterations=10,
+        description="Iterative implementation-review-confirmation loop for each stage.",
+        sub_agents=[coding_agent, review_agent, review_confirmation],
+        max_iterations=5,
     )
 
     # ------------------------- Summary Agent -------------------------
@@ -180,14 +447,14 @@ def create_agent(
     logger.info("[AgenticDS] Loading summary_agent prompt")
     summary_agent_instructions = load_prompt("summary")
 
-    logger.info(f"[AgenticDS] Creating summary_agent with model={model or DEFAULT_MODEL}")
+    logger.info(f"[AgenticDS] Creating summary_agent with model={DEFAULT_MODEL}")
 
     summary_agent = LoopDetectionAgent(
         name="summary_agent",
-        model=model or DEFAULT_MODEL,
-        description="Summarizes results into a comprehensive report.",
+        model=DEFAULT_MODEL,
+        description="Summarizes results into a comprehensive pure text report.",
         instruction=summary_agent_instructions,
-        tools=mcp_toolsets,
+        tools=mcp_toolsets,  # Needs tools to read files and write summary
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -197,42 +464,41 @@ def create_agent(
         generate_content_config=get_generate_content_config(temperature=0.3),
     )
 
-    # ------------------------- Plan Generator -------------------------
+    # ------------------------- High Level Planning Agents -------------------------
 
-    logger.info("[AgenticDS] Loading plan_generator prompt")
-    plan_generator_instructions = load_prompt("plan_generator")
+    logger.info("[AgenticDS] Loading plan maker agent prompt")
+    plan_maker_instructions = load_prompt("plan_maker")
 
-    logger.info(f"[AgenticDS] Creating plan_generator with model={model or DEFAULT_MODEL}")
+    logger.info(f"[AgenticDS] Creating plan maker agent with model={DEFAULT_MODEL}")
 
-    plan_generator = LoopDetectionAgent(
-        name="plan_generator",
-        model=model or DEFAULT_MODEL,
-        description="Generates high-level plans for complex tasks.",
-        instruction=plan_generator_instructions,
+    plan_maker_agent = LoopDetectionAgent(
+        name="plan_maker_agent",
+        model=DEFAULT_MODEL,
+        description="Plan maker agent - creates high-level plans for complex tasks.",
+        instruction=plan_maker_instructions,
         tools=mcp_toolsets,
+        output_key="high_level_plan",
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
                 thinking_budget=-1,
             ),
         ),
-        generate_content_config=get_generate_content_config(temperature=0.7),
-        output_key="plan",
+        generate_content_config=get_generate_content_config(temperature=0.6),
     )
 
-    # ------------------------- Root Agent -------------------------
+    logger.info("[AgenticDS] Loading plan reviewer agent prompt")
+    plan_reviewer_instructions = load_prompt("plan_reviewer")
 
-    logger.info("[AgenticDS] Loading root agent prompt")
-    root_instructions = load_prompt("agent_base")
+    logger.info(f"[AgenticDS] Creating plan reviewer agent with model={REVIEW_MODEL}")
 
-    logger.info(f"[AgenticDS] Creating root agent with model={model or DEFAULT_MODEL}")
-
-    root_agent = LoopDetectionAgent(
-        name="agentic_data_scientist_agent",
-        model=model or DEFAULT_MODEL,
-        description="Agentic Data Scientist root agent - orchestrates the entire workflow.",
-        instruction=root_instructions,
+    plan_reviewer_agent = LoopDetectionAgent(
+        name="plan_reviewer_agent",
+        model=REVIEW_MODEL,
+        description="Plan reviewer agent - reviews high-level plans for completeness and correctness.",
+        instruction=plan_reviewer_instructions,
         tools=mcp_toolsets,
+        output_key="plan_review_feedback",
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -242,14 +508,102 @@ def create_agent(
         generate_content_config=get_generate_content_config(temperature=0.3),
     )
 
-    # Create sequential workflow
+    high_level_planning_loop = NonEscalatingLoopAgent(
+        name="high_level_planning_loop",
+        description="Carries out high-level planning through multiple iterations.",
+        sub_agents=[
+            plan_maker_agent,
+            plan_reviewer_agent,
+            create_review_confirmation_agent(
+                auto_exit_on_completion=True,
+                prompt_name="plan_review_confirmation"
+            ),
+        ],
+        max_iterations=10,
+    )
+
+    # ------------------------- High Level Plan Parser -------------------------
+
+    logger.info("[AgenticDS] Loading plan parser prompt")
+    plan_parser_instructions = load_prompt("plan_parser")
+
+    logger.info(f"[AgenticDS] Creating plan parser agent with model={DEFAULT_MODEL}")
+
+    high_level_plan_parser = LoopDetectionAgent(
+        name="high_level_plan_parser",
+        model=DEFAULT_MODEL,
+        description="Parses high-level plan into stages and success criteria.",
+        instruction=plan_parser_instructions,
+        tools=[],  # NO TOOLS - pure JSON parsing
+        output_schema=PLAN_PARSER_OUTPUT_SCHEMA,
+        output_key="parsed_plan_output",
+        after_agent_callback=plan_parser_callback,
+        generate_content_config=get_generate_content_config(temperature=0.0),
+    )
+
+    # ------------------------- Success Criteria Checker -------------------------
+
+    logger.info("[AgenticDS] Loading criteria checker prompt")
+    criteria_checker_instructions = load_prompt("criteria_checker")
+
+    logger.info(f"[AgenticDS] Creating criteria checker agent with model={REVIEW_MODEL}")
+
+    success_criteria_checker = LoopDetectionAgent(
+        name="success_criteria_checker",
+        model=REVIEW_MODEL,
+        description="Checks which high-level success criteria have been met.",
+        instruction=criteria_checker_instructions,
+        tools=mcp_toolsets,  # NEEDS TOOLS to inspect files
+        output_schema=CRITERIA_CHECKER_OUTPUT_SCHEMA,
+        output_key="criteria_checker_output",
+        after_agent_callback=criteria_checker_callback,
+        generate_content_config=get_generate_content_config(temperature=0.0),
+    )
+
+    # ------------------------- Stage Reflector -------------------------
+
+    logger.info("[AgenticDS] Loading stage reflector prompt")
+    stage_reflector_instructions = load_prompt("stage_reflector")
+
+    logger.info(f"[AgenticDS] Creating stage reflector agent with model={DEFAULT_MODEL}")
+
+    stage_reflector = LoopDetectionAgent(
+        name="stage_reflector",
+        model=DEFAULT_MODEL,
+        description="Reflects on and adapts remaining implementation stages.",
+        instruction=stage_reflector_instructions,
+        tools=mcp_toolsets,  # NEEDS TOOLS for context
+        output_schema=STAGE_REFLECTOR_OUTPUT_SCHEMA,
+        output_key="stage_reflector_output",
+        after_agent_callback=stage_reflector_callback,
+        generate_content_config=get_generate_content_config(temperature=0.4),
+    )
+
+    # ------------------------- Stage Orchestrator -------------------------
+
+    logger.info("[AgenticDS] Creating stage orchestrator")
+
+    from agentic_data_scientist.agents.adk.stage_orchestrator import StageOrchestratorAgent
+
+    stage_orchestrator = StageOrchestratorAgent(
+        implementation_loop=implementation_loop,
+        criteria_checker=success_criteria_checker,
+        stage_reflector=stage_reflector,
+        name="stage_orchestrator",
+        description="Orchestrates stage-by-stage implementation with adaptive planning.",
+    )
+
+    # ------------------------- Root Workflow -------------------------
+
+    logger.info("[AgenticDS] Creating root workflow")
+
     workflow = SequentialAgent(
         name="agentic_data_scientist_workflow",
-        description="Complete Agentic Data Scientist workflow from planning to summary.",
+        description="Complete Agentic Data Scientist workflow with adaptive stage-wise implementation.",
         sub_agents=[
-            root_agent,
-            plan_generator,
-            planning_loop,
+            high_level_planning_loop,
+            high_level_plan_parser,
+            stage_orchestrator,
             summary_agent,
         ],
     )
