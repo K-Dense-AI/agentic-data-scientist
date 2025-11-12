@@ -106,6 +106,7 @@ class DataScientist:
 
         # ADK components
         self.agent = None
+        self.app = None  # Will store App instance for ADK agents
         self.session_service = None
         self.runner = None
 
@@ -117,41 +118,115 @@ class DataScientist:
             return  # Already set up
 
         if self.config.agent_type == "adk":
-            from agentic_data_scientist.agents.adk import create_agent
+            from agentic_data_scientist.agents.adk import create_app
 
-            self.agent = create_agent(
+            # Create App instead of bare agent
+            app = create_app(
                 working_dir=str(self.working_dir),
                 mcp_servers=self.config.mcp_servers,
             )
+
+            # Store both app and agent references
+            self.app = app
+            self.agent = app.root_agent  # For compatibility
+
         elif self.config.agent_type == "claude_code":
+            from google.adk.agents import Agent
+            from google.adk.apps import App
+            from google.adk.apps.app import EventsCompactionConfig
+
             from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
 
-            self.agent = ClaudeCodeAgent(
+            # Create claude code agent
+            claude_agent = ClaudeCodeAgent(
                 working_dir=str(self.working_dir),
+            )
+            self.agent = claude_agent
+
+            # Wrap in minimal App for compression only (no caching for claude_code)
+            # Create a minimal wrapper agent
+            wrapper_agent = Agent(
+                name="claude_code_wrapper",
+                description="Wrapper for Claude Code agent",
+            )
+
+            compression_config = EventsCompactionConfig(
+                summarizer=None,
+                compaction_interval=3,  # Compress every 3 invocations
+                overlap_size=2,
+            )
+
+            self.app = App(
+                name="agentic-data-scientist-claude",
+                root_agent=wrapper_agent,
+                events_compaction_config=compression_config,
             )
         else:
             raise ValueError(f"Unknown agent type: {self.config.agent_type}")
 
-        # Create session service and pre-create the session
+        # Create session service
         self.session_service = InMemorySessionService()
 
-        # Pre-create the session so it exists when runner tries to use it
+        # Get app_name from app if available, otherwise use default
+        app_name = self.app.name if self.app else "agentic_data_scientist"
+
+        # Pre-create the session
         session = await self.session_service.create_session(
-            app_name="agentic_data_scientist",
+            app_name=app_name,
             user_id="default_user",
             session_id=self.session_id,
         )
-
-        # Store session for later state initialization
         self.session = session
 
-        self.runner = Runner(
-            agent=self.agent,
-            app_name="agentic_data_scientist",
-            session_service=self.session_service,
-        )
+        # Store app instance in session state for compression access
+        if self.app:
+            session.state["app_instance"] = self.app
+
+        # Create runner with App if available
+        if self.app:
+            self.runner = Runner(
+                app=self.app,  # Pass App instead of agent
+                session_service=self.session_service,
+            )
+        else:
+            # Fallback for claude_code (though we should always have app now)
+            self.runner = Runner(
+                agent=self.agent,
+                app_name="agentic_data_scientist",
+                session_service=self.session_service,
+            )
 
         logger.info(f"Agent setup complete: {self.config.agent_type}")
+
+    async def _run_manual_compaction(self, session):
+        """
+        Manually run compression for claude_code agent.
+
+        This is needed because claude_code doesn't use ADK's Runner,
+        which normally handles automatic compression.
+
+        Parameters
+        ----------
+        session : Session
+            The session to run compaction on
+        """
+        if not self.app or not self.app.events_compaction_config:
+            logger.debug("[API] No app or compression config - skipping manual compaction")
+            return
+
+        try:
+            from google.adk.apps.compaction import _run_compaction_for_sliding_window
+
+            event_count_before = len(session.events)
+            logger.info(f"[API] Manual compression starting: {event_count_before} events in session")
+
+            # Manually trigger compression using same logic as Runner
+            await _run_compaction_for_sliding_window(self.app, session, self.session_service)
+
+            event_count_after = len(session.events)
+            logger.info(f"[API] ✓ Manual compression completed: {event_count_before} -> {event_count_after} events")
+        except Exception as e:
+            logger.warning(f"[API] Manual compression failed: {e}")
 
     def save_files(self, files: List[tuple]) -> List[FileInfo]:
         """
@@ -265,8 +340,9 @@ class DataScientist:
 
             # Initialize session state EARLY before any agent execution
             # Get the session from session_service to ensure we're modifying the right instance
+            app_name = self.app.name if self.app else "agentic_data_scientist"
             session = await self.session_service.get_session(
-                app_name="agentic_data_scientist", user_id="default_user", session_id=self.session_id
+                app_name=app_name, user_id="default_user", session_id=self.session_id
             )
 
             # Set state variables (state is mutable, changes persist automatically)
@@ -396,6 +472,13 @@ class DataScientist:
                         )
                         yield event_to_dict(usage_event)
 
+            # Run manual compression after completion (for claude_code agent)
+            app_name = self.app.name if self.app else "agentic_data_scientist"
+            session = await self.session_service.get_session(
+                app_name=app_name, user_id="default_user", session_id=self.session_id
+            )
+            await self._run_manual_compaction(session)
+
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
@@ -454,6 +537,13 @@ class DataScientist:
                                 author = getattr(event, 'author', 'agent')
                                 prefix = f"[{author}]" if not is_thought else f"[{author} - THINKING]"
                                 responses.append(f"{prefix}: {part.text}")
+
+            # Run manual compression after completion (for claude_code agent)
+            app_name = self.app.name if self.app else "agentic_data_scientist"
+            session = await self.session_service.get_session(
+                app_name=app_name, user_id="default_user", session_id=self.session_id
+            )
+            await self._run_manual_compaction(session)
 
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()

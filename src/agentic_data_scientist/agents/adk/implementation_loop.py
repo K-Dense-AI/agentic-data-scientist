@@ -113,7 +113,10 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     logger.info("[AgenticDS] Implementation agents created successfully")
 
     # Return coding agent, review agent, AND review confirmation agent
-    return coding_agent, review_agent, create_review_confirmation_agent(
-        auto_exit_on_completion=True,
-        prompt_name="implementation_review_confirmation"
+    return (
+        coding_agent,
+        review_agent,
+        create_review_confirmation_agent(
+            auto_exit_on_completion=True, prompt_name="implementation_review_confirmation"
+        ),
     )

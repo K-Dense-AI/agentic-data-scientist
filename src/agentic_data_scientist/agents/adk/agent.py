@@ -13,6 +13,9 @@ from typing import AsyncGenerator, List, Optional
 from dotenv import load_dotenv
 from google.adk.agents import InvocationContext, LoopAgent, SequentialAgent
 from google.adk.agents.callback_context import CallbackContext
+from google.adk.agents.context_cache_config import ContextCacheConfig
+from google.adk.apps import App
+from google.adk.apps.app import EventsCompactionConfig
 from google.adk.events import Event
 from google.adk.planners import BuiltInPlanner
 from google.adk.utils.context_utils import Aclosing
@@ -430,9 +433,7 @@ def create_agent(
 
     # ------------------------- Implementation Loop -------------------------
 
-    coding_agent, review_agent, review_confirmation = make_implementation_agents(
-        str(working_dir), mcp_toolsets
-    )
+    coding_agent, review_agent, review_confirmation = make_implementation_agents(str(working_dir), mcp_toolsets)
 
     # LoopAgent wrapper for implementation
     implementation_loop = NonEscalatingLoopAgent(
@@ -514,10 +515,7 @@ def create_agent(
         sub_agents=[
             plan_maker_agent,
             plan_reviewer_agent,
-            create_review_confirmation_agent(
-                auto_exit_on_completion=True,
-                prompt_name="plan_review_confirmation"
-            ),
+            create_review_confirmation_agent(auto_exit_on_completion=True, prompt_name="plan_review_confirmation"),
         ],
         max_iterations=10,
     )
@@ -611,3 +609,51 @@ def create_agent(
     logger.info("[AgenticDS] Agent creation complete")
 
     return workflow
+
+
+def create_app(
+    working_dir: Optional[str] = None,
+    mcp_servers: Optional[List[str]] = None,
+) -> App:
+    """
+    Create an App instance with context management for the ADK agent.
+
+    Parameters
+    ----------
+    working_dir : str, optional
+        Working directory for the session
+    mcp_servers : List[str], optional
+        List of MCP servers to enable for tools
+
+    Returns
+    -------
+    App
+        The configured App with context caching and compression
+    """
+    # Create the root agent
+    root_agent = create_agent(working_dir=working_dir, mcp_servers=mcp_servers)
+
+    # Configure context compression with aggressive settings
+    compression_config = EventsCompactionConfig(
+        summarizer=None,  # Will auto-create LlmEventSummarizer with agent's model
+        compaction_interval=3,  # Compress every 3 invocations
+        overlap_size=2,  # Keep 2 invocations overlap for context
+    )
+
+    # Configure context caching (just creating the config enables caching)
+    cache_config = ContextCacheConfig()
+
+    # Create App with all features
+    app = App(
+        name="agentic-data-scientist",
+        root_agent=root_agent,
+        events_compaction_config=compression_config,
+        context_cache_config=cache_config,
+    )
+
+    logger.info("[AgenticDS] Created App with context compression and caching enabled")
+    logger.info(
+        f"[AgenticDS] Compression: interval={compression_config.compaction_interval}, overlap={compression_config.overlap_size}"
+    )
+
+    return app
