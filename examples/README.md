@@ -43,6 +43,23 @@ Shows conversation context management:
 uv run python examples/multi_turn_conversation.py
 ```
 
+### Context7 Documentation Retrieval
+**File:** `context7_example.py`
+
+Demonstrates using Context7 MCP for library documentation:
+- Querying up-to-date library documentation
+- Getting examples for latest features
+- Using Context7 with Claude Code agent
+
+**Requirements:**
+- `CONTEXT7_API_KEY` set in `.env` file
+- `.claude/settings.json` configured (already set up)
+
+**Run:**
+```bash
+uv run python examples/context7_example.py
+```
+
 ## Sample Data
 
 **File:** `test_data.csv`

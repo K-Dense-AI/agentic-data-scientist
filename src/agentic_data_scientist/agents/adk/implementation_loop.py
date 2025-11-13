@@ -103,11 +103,7 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
         ),
         generate_content_config=get_generate_content_config(temperature=0.0),
         output_key="review_feedback",
-        # Loop detection settings
-        min_pattern_length=200,
-        max_pattern_length=1000,
-        repetition_threshold=5,
-        window_size=5000,
+        include_contents="none",
     )
 
     logger.info("[AgenticDS] Implementation agents created successfully")

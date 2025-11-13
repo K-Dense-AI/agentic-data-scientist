@@ -209,7 +209,7 @@ Each agent in the workflow has a specific responsibility:
 │  └────────────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                     Tool Layer                               │
-│  • MCP: filesystem (read-only), fetch                       │
+│  • MCP: filesystem (read-only), fetch, context7             │
 │  • Claude Skills: 380+ scientific databases and packages    │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -231,13 +231,15 @@ CODING_MODEL=claude-sonnet-4-5-20250929
 
 # Optional: MCP server configuration
 MCP_FILESYSTEM_ROOT=/path/to/your/data
+CONTEXT7_API_KEY=your_context7_key_here
 ```
 
 ### Tools & Skills
 
-**MCP Servers** (used by planning and review agents):
-- **filesystem**: Read-only file operations (read_file, list_directory, search_files, get_file_info)
-- **fetch**: Web content fetching and HTTP requests
+**MCP Servers**:
+- **filesystem** (planning/review agents): Read-only file operations (read_file, list_directory, search_files, get_file_info)
+- **fetch** (planning/review agents): Web content fetching and HTTP requests
+- **context7** (coding agent): Library documentation and context retrieval
 
 **Claude Skills** (used by coding agent):
 - **380+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)

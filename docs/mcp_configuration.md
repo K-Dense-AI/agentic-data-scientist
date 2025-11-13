@@ -7,7 +7,7 @@ This guide explains how to configure Model Context Protocol (MCP) servers for Ag
 The ADK multi-agent workflow uses MCP servers to provide tools to agents. Different agents have access to different toolsets:
 
 - **Planning and Review Agents** (ADK): Use filesystem and fetch MCP servers for reading files and fetching web content
-- **Coding Agent** (Claude Code): Has access to 380+ scientific Skills for specialized tasks
+- **Coding Agent** (Claude Code): Has access to Context7 MCP for library documentation and 380+ scientific Skills for specialized tasks
 
 ## MCP Servers
 
@@ -60,6 +60,47 @@ Provides web content fetching capabilities to agents.
 # Agents can automatically fetch web content during analysis
 with DataScientist() as ds:
     result = ds.run("Summarize the latest research on transformer architectures from ArXiv")
+```
+
+### Context7 Server
+
+Provides documentation and context retrieval capabilities for various libraries and frameworks.
+
+**Available Tools:**
+- `resolve-library-id`: Resolve a package name to a Context7-compatible library ID
+- `get-library-docs`: Fetch up-to-date documentation for a library
+
+**Configuration:**
+
+Context7 is configured via the `.claude/settings.json` file in the project root:
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+**Environment Variable:**
+
+```bash
+# In .env file
+CONTEXT7_API_KEY=your-api-key-here
+```
+
+**Usage:**
+
+```python
+# The coding agent can automatically query library documentation
+with DataScientist(agent_type="claude_code") as ds:
+    result = ds.run("Show me how to use the latest features in pandas 2.0")
 ```
 
 ## Claude Scientific Skills
@@ -141,6 +182,7 @@ with DataScientist() as ds:
 │  │ • File operations (read/write)               │          │
 │  └────────────────────┬─────────────────────────┘          │
 │                       │                                     │
+│                       ├─── MCP: context7 (docs)             │
 │                       └─── Claude Skills (380+)             │
 │                              ├─ Scientific DBs              │
 │                              └─ Scientific Packages         │
@@ -323,6 +365,9 @@ All MCP-related environment variables:
 ```bash
 # Filesystem MCP
 MCP_FILESYSTEM_ROOT=/path/to/data
+
+# Context7 MCP (for documentation retrieval)
+CONTEXT7_API_KEY=your-context7-api-key
 
 # Claude Skills (optional, auto-configured)
 CLAUDE_SCIENTIFIC_SKILLS_URL=https://mcp.k-dense.ai/claude-scientific-skills/mcp

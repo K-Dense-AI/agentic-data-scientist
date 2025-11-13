@@ -46,6 +46,7 @@ class SessionConfig:
     max_llm_calls: int = 1024
     session_id: Optional[str] = None
     working_dir: Optional[str] = None
+    auto_cleanup: bool = True
 
 
 @dataclass
@@ -83,26 +84,46 @@ class DataScientist:
         Type of agent to use: "adk" or "claude_code" (default: "adk")
     mcp_servers : List[str], optional
         List of MCP servers to enable
+    working_dir : str, optional
+        Working directory for the session. If not provided, a temporary directory
+        will be created in /tmp
+    auto_cleanup : bool, optional
+        Whether to automatically cleanup the working directory after completion.
+        Defaults to False if working_dir is provided, True otherwise
     """
 
     def __init__(
         self,
         agent_type: str = "adk",
         mcp_servers: Optional[List[str]] = None,
+        working_dir: Optional[str] = None,
+        auto_cleanup: Optional[bool] = None,
     ):
         """Initialize Agentic Data Scientist core with configuration."""
-        self.config = SessionConfig(
-            agent_type=agent_type,
-            mcp_servers=mcp_servers,
-        )
-
         # Generate session ID
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         unique_id = uuid.uuid4().hex[:8]
         self.session_id = f"session_{timestamp}_{unique_id}"
 
-        # Create temporary working directory
-        self.working_dir = Path(tempfile.mkdtemp(prefix=f"agentic_ds_{self.session_id}_"))
+        # Set up working directory
+        if working_dir:
+            self.working_dir = Path(working_dir)
+            self.working_dir.mkdir(parents=True, exist_ok=True)
+            self._user_provided_dir = True
+            # Default: don't cleanup user-provided directories
+            self.auto_cleanup = auto_cleanup if auto_cleanup is not None else False
+        else:
+            self.working_dir = Path(tempfile.mkdtemp(prefix=f"agentic_ds_{self.session_id}_"))
+            self._user_provided_dir = False
+            # Default: cleanup temporary directories
+            self.auto_cleanup = auto_cleanup if auto_cleanup is not None else True
+
+        self.config = SessionConfig(
+            agent_type=agent_type,
+            mcp_servers=mcp_servers,
+            working_dir=str(self.working_dir),
+            auto_cleanup=self.auto_cleanup,
+        )
 
         # ADK components
         self.agent = None
@@ -111,6 +132,8 @@ class DataScientist:
         self.runner = None
 
         logger.info(f"Initialized Agentic Data Scientist session: {self.session_id}")
+        logger.info(f"Working directory: {self.working_dir}")
+        logger.info(f"Auto-cleanup enabled: {self.auto_cleanup}")
 
     async def _setup_agent(self):
         """Set up the agent and session service."""
@@ -595,7 +618,11 @@ class DataScientist:
         return asyncio.run(self.run_async(message, files, stream=False, **kwargs))
 
     def cleanup(self):
-        """Clean up temporary working directory."""
+        """Clean up working directory if auto_cleanup is enabled."""
+        if not self.auto_cleanup:
+            logger.info(f"Auto-cleanup disabled. Working directory preserved at: {self.working_dir}")
+            return
+
         if self.working_dir and self.working_dir.exists():
             import shutil
 

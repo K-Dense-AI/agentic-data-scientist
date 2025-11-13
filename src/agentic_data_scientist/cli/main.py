@@ -37,12 +37,25 @@ logger = logging.getLogger(__name__)
     type=click.Choice(['orchestrated', 'simple']),
     help='Execution mode: "orchestrated" (default, with planning) or "simple" (direct Claude Code)',
 )
+@click.option(
+    '--working-dir',
+    '-w',
+    type=click.Path(),
+    help='Working directory for the session (default: temporary directory in /tmp)',
+)
+@click.option(
+    '--keep-files',
+    is_flag=True,
+    help='Keep working directory after completion (default: cleanup temp dirs, preserve custom dirs)',
+)
 @click.option('--stream/--no-stream', default=False, help='Stream responses in real-time')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
 def main(
     query: Optional[str],
     files: tuple,
     mode: str,
+    working_dir: Optional[str],
+    keep_files: bool,
     stream: bool,
     verbose: bool,
 ):
@@ -106,9 +119,29 @@ def main(
     # Map mode to agent_type
     agent_type = "adk" if mode == "orchestrated" else "claude_code"
 
+    # Determine auto_cleanup based on keep_files flag
+    auto_cleanup = not keep_files if keep_files else None  # None means use default behavior
+
     # Create core instance
     try:
-        core = DataScientist(agent_type=agent_type)
+        core = DataScientist(
+            agent_type=agent_type,
+            working_dir=working_dir,
+            auto_cleanup=auto_cleanup,
+        )
+        
+        # Display working directory information
+        if working_dir:
+            click.echo(f"Working directory: {core.working_dir}")
+        else:
+            click.echo(f"Working directory (temporary): {core.working_dir}")
+        
+        if core.auto_cleanup:
+            click.echo("Files will be cleaned up after completion")
+        else:
+            click.echo("Files will be preserved after completion")
+        click.echo("")
+        
     except Exception as e:
         click.echo(f"Error initializing Agentic Data Scientist: {e}", err=True)
         sys.exit(1)
@@ -131,6 +164,9 @@ def main(
                         click.echo(f"  - {file}")
                 click.echo(f"\nDuration: {result.duration:.2f}s")
                 click.echo(f"Session ID: {result.session_id}")
+                click.echo(f"Working directory: {core.working_dir}")
+                if not core.auto_cleanup:
+                    click.echo(f"\nFiles preserved at: {core.working_dir}")
             else:
                 click.echo(f"\nError: {result.error}", err=True)
                 sys.exit(1)
@@ -206,6 +242,9 @@ async def run_streaming(core, query, files):
                 click.echo(f"Duration: {duration:.2f}s")
                 click.echo(f"Files created: {files_count}")
                 click.echo(f"Session ID: {event.get('session_id', 'unknown')}")
+                click.echo(f"Working directory: {core.working_dir}")
+                if not core.auto_cleanup:
+                    click.echo(f"\nFiles preserved at: {core.working_dir}")
 
             elif event_type == 'error':
                 error_content = event.get('content', 'Unknown error')

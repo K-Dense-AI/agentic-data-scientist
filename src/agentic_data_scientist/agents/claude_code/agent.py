@@ -313,14 +313,15 @@ Requirements:
 
             # Create options for Claude Agent SDK
             # Skills are loaded from .claude/skills/ via setting_sources
+            # MCP servers are loaded from .claude/settings.json via setting_sources
             options = ClaudeAgentOptions(
                 cwd=working_dir,
                 permission_mode="bypassPermissions",
                 model=self.model,
                 env=env,
                 system_prompt={"type": "preset", "preset": "claude_code", "append": system_instructions},
-                setting_sources=["project"],  # Load Skills from .claude/skills/
-                mcp_servers={},  # No MCP servers - using native Skills instead
+                setting_sources=["project"],  # Load Skills from .claude/skills/ and MCP servers from .claude/settings.json
+                # mcp_servers not specified - will be loaded from .claude/settings.json
             )
 
             yield Event(
