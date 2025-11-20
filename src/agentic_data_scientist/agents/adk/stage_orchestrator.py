@@ -14,8 +14,43 @@ from google.adk.events import Event
 from google.genai import types
 from pydantic import PrivateAttr
 
+from agentic_data_scientist.agents.adk.event_compression import compress_events_manually
+
 
 logger = logging.getLogger(__name__)
+
+
+def format_criteria_status(criteria: List[Dict], max_length: int = 80) -> str:
+    """
+    Format criteria list for readable logging.
+
+    Parameters
+    ----------
+    criteria : List[Dict]
+        List of criteria dictionaries with 'index', 'criteria', and 'met' fields
+    max_length : int, optional
+        Maximum length for criteria text before truncation (default: 80)
+
+    Returns
+    -------
+    str
+        Formatted multi-line string showing each criterion with status
+    """
+    if not criteria:
+        return "  (No criteria defined)"
+    
+    lines = []
+    for c in criteria:
+        status = "✅ MET" if c.get("met", False) else "❌ NOT MET"
+        criteria_text = c.get("criteria", "Unknown criterion")
+        
+        # Truncate long criteria text
+        if len(criteria_text) > max_length:
+            criteria_text = criteria_text[:max_length] + "..."
+        
+        lines.append(f"  [{status}] Criterion {c.get('index', '?')}: {criteria_text}")
+    
+    return "\n".join(lines)
 
 
 class StageOrchestratorAgent(BaseAgent):
@@ -72,87 +107,6 @@ class StageOrchestratorAgent(BaseAgent):
     def stage_reflector(self) -> BaseAgent:
         """Get the stage reflector agent."""
         return self._stage_reflector
-
-    async def _summarize_claude_code_events(self, ctx: InvocationContext, stage_idx: int):
-        """
-        Manually summarize events from claude_code agent to reduce context.
-
-        This creates a custom summary event that replaces verbose claude_code
-        output with a concise summary, preventing context overflow.
-
-        Parameters
-        ----------
-        ctx : InvocationContext
-            The invocation context
-        stage_idx : int
-            The current stage index
-        """
-        session = ctx.session
-        events = session.events
-
-        if not events or len(events) < 10:
-            return  # Not enough events to justify summarization
-
-        # Find events since last compaction
-        last_compaction_idx = -1
-        for i in range(len(events) - 1, -1, -1):
-            if events[i].actions and events[i].actions.compaction:
-                last_compaction_idx = i
-                break
-
-        # Get recent events (since last compaction or last 50 events)
-        start_idx = max(0, last_compaction_idx + 1, len(events) - 50)
-        recent_events = events[start_idx:]
-
-        # Count tool calls and large outputs
-        tool_call_count = 0
-        text_parts = []
-        total_chars = 0
-
-        for event in recent_events:
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        total_chars += len(part.text)
-                        # Only include key messages, not all tool outputs
-                        if event.author in ['coding_agent', 'review_agent']:
-                            if len(part.text) < 500:  # Short messages only
-                                text_parts.append(f"[{event.author}]: {part.text[:200]}")
-                    if hasattr(part, 'function_call') and part.function_call:
-                        tool_call_count += 1
-
-        logger.info(
-            f"[StageOrchestrator] Stage {stage_idx} context: {total_chars} chars, {tool_call_count} tool calls in {len(recent_events)} events"
-        )
-
-        # If context is large, create a summary event
-        if total_chars > 50000 or tool_call_count > 20:
-            from google.adk.events import Event, EventActions, EventCompaction
-            from google.genai import types as genai_types
-
-            summary_text = (
-                f"[STAGE {stage_idx} SUMMARY]\n"
-                f"Stage completed successfully with {tool_call_count} tool calls across {len(recent_events)} events.\n"
-                f"Key outputs: Files created, scripts written, analysis completed.\n"
-                f"Context size reduced from ~{total_chars} chars to this summary."
-            )
-
-            # Create compaction event
-            compaction = EventCompaction(
-                start_timestamp=recent_events[0].timestamp if recent_events else 0.0,
-                end_timestamp=recent_events[-1].timestamp if recent_events else 0.0,
-                compacted_content=genai_types.Content(role='model', parts=[genai_types.Part(text=summary_text)]),
-            )
-
-            summary_event = Event(
-                author='stage_orchestrator',
-                actions=EventActions(compaction=compaction),
-                invocation_id=ctx.invocation_id,
-            )
-
-            # Append to session
-            await ctx.session_service.append_event(session=session, event=summary_event)
-            logger.info(f"[StageOrchestrator] ✓ Created custom summary event for stage {stage_idx}")
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
@@ -274,6 +228,14 @@ class StageOrchestratorAgent(BaseAgent):
 
         logger.info(f"[StageOrchestrator] Starting orchestration with {len(stages)} stages")
         logger.info(f"[StageOrchestrator] Success criteria count: {len(criteria)}")
+        
+        # Log all success criteria at the start for visibility
+        logger.info("[StageOrchestrator] Success Criteria (End-State Goals):")
+        logger.info(format_criteria_status(criteria))
+        logger.info(
+            "[StageOrchestrator] Note: These are end-state goals that will be progressively "
+            "met as stages complete. Early 'NOT MET' status is expected and normal."
+        )
 
         # Initialize stage_implementations if not exists
         if "stage_implementations" not in state:
@@ -294,6 +256,11 @@ class StageOrchestratorAgent(BaseAgent):
             # Check exit condition: all criteria met?
             criteria_met_count = sum(1 for c in criteria if c.get("met", False))
             logger.info(f"[StageOrchestrator] Criteria status: {criteria_met_count}/{len(criteria)} met")
+            
+            # Show detailed criteria status if any are not met
+            if criteria_met_count < len(criteria):
+                logger.info("[StageOrchestrator] Current criteria status:")
+                logger.info(format_criteria_status(criteria))
 
             if all(c.get("met", False) for c in criteria):
                 logger.info("[StageOrchestrator] 🎉 All success criteria met! Exiting to summary.")
@@ -386,37 +353,6 @@ class StageOrchestratorAgent(BaseAgent):
             state.pop("implementation_summary", None)
             state.pop("review_feedback", None)
 
-            # === Proactively run compression BEFORE stage to reduce context ===
-            logger.info(f"[StageOrchestrator] Running proactive compression before stage {stage_idx}")
-            try:
-                session = ctx.session
-                # Check if we have an app with compression config
-                if hasattr(ctx, 'session_service'):
-                    # Try to manually trigger compression using private ADK API
-                    # Note: This uses a private module that may change in future ADK versions
-                    try:
-                        from google.adk.apps.compaction import _run_compaction_for_sliding_window
-                        
-                        # Get the runner's app from state
-                        if "app_instance" in state:
-                            app = state["app_instance"]
-                            if app and hasattr(app, 'events_compaction_config') and app.events_compaction_config:
-                                await _run_compaction_for_sliding_window(app, session, ctx.session_service)
-                                logger.info(f"[StageOrchestrator] ✓ Proactive compression completed for stage {stage_idx}")
-                            else:
-                                logger.debug(f"[StageOrchestrator] No compression config available for app")
-                        else:
-                            logger.debug(f"[StageOrchestrator] No app_instance in state for proactive compression")
-                    except ImportError as import_err:
-                        # Private compaction module not available (ADK API may have changed)
-                        logger.debug(
-                            f"[StageOrchestrator] Cannot import private compaction module (ADK API may have changed): {import_err}"
-                        )
-            except AttributeError as e:
-                logger.warning(f"[StageOrchestrator] Proactive compression failed (attribute error): {e}")
-            except Exception as e:
-                logger.warning(f"[StageOrchestrator] Proactive compression failed: {e}")
-
             # === Run Implementation Loop ===
             logger.info(f"[StageOrchestrator] Running implementation_loop for stage {stage_idx}")
 
@@ -426,12 +362,16 @@ class StageOrchestratorAgent(BaseAgent):
 
                 logger.info(f"[StageOrchestrator] Completed implementation_loop for stage {stage_idx}")
 
-                # === Custom summarization for claude_code context ===
-                logger.info("[StageOrchestrator] Running custom claude_code event summarization")
+                # === Manual Event Compression After Implementation Loop ===
+                logger.info("[StageOrchestrator] Running manual event compression after implementation loop")
                 try:
-                    await self._summarize_claude_code_events(ctx, stage_idx)
-                except Exception as e:
-                    logger.warning(f"[StageOrchestrator] Claude code summarization failed: {e}")
+                    await compress_events_manually(
+                        ctx=ctx,
+                        event_threshold=40,
+                        overlap_size=20,
+                    )
+                except Exception as compress_err:
+                    logger.warning(f"[StageOrchestrator] Manual compression failed: {compress_err}")
 
             except Exception as e:
                 logger.error(
@@ -485,6 +425,10 @@ class StageOrchestratorAgent(BaseAgent):
                 logger.info(
                     f"[StageOrchestrator] Criteria status after check: {criteria_met_count}/{len(criteria)} met"
                 )
+                
+                # Show detailed criteria status after checking
+                logger.info("[StageOrchestrator] Updated criteria status:")
+                logger.info(format_criteria_status(criteria))
             except Exception as e:
                 logger.error(
                     f"[StageOrchestrator] Criteria checker failed for stage {stage_idx}: {e}",

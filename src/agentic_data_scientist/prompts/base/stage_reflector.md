@@ -74,7 +74,8 @@ If everything looks good and no adaptations are needed:
 
 # Critical Instructions
 
-- **Use your tools** to inspect the working directory if needed for context
+- **Inspect the working directory** using available tools to understand what's been accomplished
+- **Review generated files** to assess progress and identify gaps
 - **Analyze the situation** - are remaining stages still appropriate?
 - **Check unmet criteria** - will remaining stages address them?
 - **Be judicious** - only modify/add if there's a clear need

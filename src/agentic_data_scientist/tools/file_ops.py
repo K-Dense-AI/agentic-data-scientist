@@ -7,11 +7,15 @@ Paths are validated to prevent access outside the working directory.
 
 import base64
 import json
+import logging
 import mimetypes
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_path(path: str, working_dir: str) -> Path:
@@ -107,6 +111,7 @@ def read_file(
     - If both head and tail are provided, tail takes precedence
     - Handles various text encodings automatically
     """
+    logger.info(f"[Tool:read_file] Reading '{path}' (head={head}, tail={tail})")
     try:
         file_path = _validate_path(path, working_dir)
         
@@ -170,6 +175,7 @@ def read_media_file(path: str, working_dir: str) -> str:
     >>> print(parsed["mimeType"])  # "image/png"
     >>> print(parsed["data"][:20])  # "iVBORw0KGgoAAAANSUh..."
     """
+    logger.info(f"[Tool:read_media_file] Reading media file '{path}'")
     try:
         file_path = _validate_path(path, working_dir)
         
@@ -235,6 +241,7 @@ def list_directory(
     - Sizes are shown in human-readable format (KB, MB, etc.)
     - Hidden files (starting with '.') are included
     """
+    logger.info(f"[Tool:list_directory] Listing '{path}' (show_sizes={show_sizes}, sort_by={sort_by})")
     try:
         dir_path = _validate_path(path, working_dir)
         
@@ -331,6 +338,7 @@ def directory_tree(
     >>> parsed = json.loads(tree)
     >>> print(parsed[0]["name"])  # First entry name
     """
+    logger.info(f"[Tool:directory_tree] Building tree for '{path}' (exclude_patterns={exclude_patterns})")
     if exclude_patterns is None:
         exclude_patterns = []
     
@@ -470,6 +478,7 @@ def search_files(
     utils.py
     lib/helpers.py
     """
+    logger.info(f"[Tool:search_files] Searching for pattern '{pattern}' in '{path}'")
     if exclude_patterns is None:
         exclude_patterns = []
     
@@ -558,6 +567,7 @@ def get_file_info(path: str, working_dir: str) -> str:
     accessed: 2025-01-15T10:35:00
     permissions: rw-r--r--
     """
+    logger.info(f"[Tool:get_file_info] Getting info for '{path}'")
     try:
         file_path = _validate_path(path, working_dir)
         

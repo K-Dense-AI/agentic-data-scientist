@@ -514,8 +514,10 @@ Requirements:
 
                         # Yield Event with all converted Parts from this UserMessage
                         # Use role="model" since this is from the user/system executing tools
-                        if google_parts:
-                            yield Event(author=self.name, content=types.Content(role="model", parts=google_parts))
+                        # COMMENTED OUT: Prevents long tool responses from polluting ADK context
+                        # Tool responses are still logged above for debugging
+                        # if google_parts:
+                        #     yield Event(author=self.name, content=types.Content(role="model", parts=google_parts))
 
                     elif message_type == "SystemMessage":
                         # System message

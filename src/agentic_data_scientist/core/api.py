@@ -201,10 +201,6 @@ class DataScientist:
         )
         self.session = session
 
-        # Store app instance in session state for compression access
-        if self.app:
-            session.state["app_instance"] = self.app
-
         # Create runner with App if available
         if self.app:
             self.runner = Runner(
@@ -220,36 +216,6 @@ class DataScientist:
             )
 
         logger.info(f"Agent setup complete: {self.config.agent_type}")
-
-    async def _run_manual_compaction(self, session):
-        """
-        Manually run compression for claude_code agent.
-
-        This is needed because claude_code doesn't use ADK's Runner,
-        which normally handles automatic compression.
-
-        Parameters
-        ----------
-        session : Session
-            The session to run compaction on
-        """
-        if not self.app or not self.app.events_compaction_config:
-            logger.debug("[API] No app or compression config - skipping manual compaction")
-            return
-
-        try:
-            from google.adk.apps.compaction import _run_compaction_for_sliding_window
-
-            event_count_before = len(session.events)
-            logger.info(f"[API] Manual compression starting: {event_count_before} events in session")
-
-            # Manually trigger compression using same logic as Runner
-            await _run_compaction_for_sliding_window(self.app, session, self.session_service)
-
-            event_count_after = len(session.events)
-            logger.info(f"[API] ✓ Manual compression completed: {event_count_before} -> {event_count_after} events")
-        except Exception as e:
-            logger.warning(f"[API] Manual compression failed: {e}")
 
     def save_files(self, files: List[tuple]) -> List[FileInfo]:
         """
@@ -495,13 +461,6 @@ class DataScientist:
                         )
                         yield event_to_dict(usage_event)
 
-            # Run manual compression after completion (for claude_code agent)
-            app_name = self.app.name if self.app else "agentic_data_scientist"
-            session = await self.session_service.get_session(
-                app_name=app_name, user_id="default_user", session_id=self.session_id
-            )
-            await self._run_manual_compaction(session)
-
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
@@ -560,13 +519,6 @@ class DataScientist:
                                 author = getattr(event, 'author', 'agent')
                                 prefix = f"[{author}]" if not is_thought else f"[{author} - THINKING]"
                                 responses.append(f"{prefix}: {part.text}")
-
-            # Run manual compression after completion (for claude_code agent)
-            app_name = self.app.name if self.app else "agentic_data_scientist"
-            session = await self.session_service.get_session(
-                app_name=app_name, user_id="default_user", session_id=self.session_id
-            )
-            await self._run_manual_compaction(session)
 
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()

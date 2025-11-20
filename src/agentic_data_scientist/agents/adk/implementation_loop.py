@@ -11,6 +11,7 @@ from google.adk.planners import BuiltInPlanner
 from google.adk.tools.tool_context import CallbackContext
 from google.genai import types
 
+from agentic_data_scientist.agents.adk.event_compression import create_compression_callback
 from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
 from agentic_data_scientist.agents.adk.review_confirmation import create_review_confirmation_agent
 from agentic_data_scientist.agents.adk.utils import REVIEW_MODEL, get_generate_content_config
@@ -89,6 +90,12 @@ def make_implementation_agents(working_dir: str, tools: list):
     # Load review prompt
     review_prompt = load_prompt("coding_review")
 
+    # Create compression callback for review agent
+    review_compression_callback = create_compression_callback(
+        event_threshold=40,
+        overlap_size=20,
+    )
+
     review_agent = LoopDetectionAgent(
         name="review_agent",
         description="Reviews implementation and provides feedback or approval.",
@@ -104,6 +111,7 @@ def make_implementation_agents(working_dir: str, tools: list):
         generate_content_config=get_generate_content_config(temperature=0.0),
         output_key="review_feedback",
         include_contents="none",
+        after_agent_callback=review_compression_callback,
     )
 
     logger.info("[AgenticDS] Implementation agents created successfully")

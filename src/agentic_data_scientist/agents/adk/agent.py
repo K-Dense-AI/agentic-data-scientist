@@ -23,6 +23,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 from typing_extensions import override
 
+from agentic_data_scientist.agents.adk.event_compression import create_compression_callback
 from agentic_data_scientist.agents.adk.implementation_loop import make_implementation_agents
 from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
 from agentic_data_scientist.agents.adk.review_confirmation import create_review_confirmation_agent
@@ -261,7 +262,18 @@ def criteria_checker_callback(callback_context: CallbackContext):
             valid_updates += 1
 
             status = "✅ MET" if update["met"] else "❌ NOT MET"
+            criteria_text = criteria[idx].get("criteria", "Unknown")
+            evidence_text = update["evidence"]
+            
+            # Truncate long texts for logging
+            if len(criteria_text) > 80:
+                criteria_text = criteria_text[:80] + "..."
+            if len(evidence_text) > 120:
+                evidence_text = evidence_text[:120] + "..."
+            
             logger.info(f"[CriteriaChecker] Criterion {idx}: {status}")
+            logger.info(f"[CriteriaChecker]   └─ Criteria: {criteria_text}")
+            logger.info(f"[CriteriaChecker]   └─ Evidence: {evidence_text}")
         else:
             logger.warning(f"[CriteriaChecker] Invalid criterion index: {idx}")
             invalid_updates += 1
@@ -274,6 +286,10 @@ def criteria_checker_callback(callback_context: CallbackContext):
             f"[CriteriaChecker] Too many invalid updates ({invalid_updates}/{len(updates)}) - "
             "criteria check may be unreliable"
         )
+    
+    # Log summary of all criteria statuses
+    met_count = sum(1 for c in criteria if c.get("met", False))
+    logger.info(f"[CriteriaChecker] Summary: {met_count}/{len(criteria)} criteria met")
 
     state["high_level_success_criteria"] = criteria
 
@@ -421,8 +437,6 @@ def create_agent(
     logger.info(f"[AgenticDS] Creating ADK agent with working_dir={working_dir}")
 
     # Create local tools with working_dir bound via wrapper functions
-    from functools import wraps
-
     from agentic_data_scientist.tools import (
         directory_tree,
         fetch_url,
@@ -433,40 +447,34 @@ def create_agent(
         search_files,
     )
 
-    # Create wrapper functions that bind working_dir while preserving function metadata
+    # Bind working_dir using wrapper functions that completely hide the parameter
+    # This ensures ADK sees the correct signature without working_dir
     working_dir_str = str(working_dir)
 
-    @wraps(read_file)
     def read_file_bound(path: str, head: Optional[int] = None, tail: Optional[int] = None) -> str:
         """Read file contents with optional head/tail line limits."""
         return read_file(path, working_dir_str, head, tail)
 
-    @wraps(read_media_file)
     def read_media_file_bound(path: str) -> str:
         """Read binary/media files and return base64 encoded data."""
         return read_media_file(path, working_dir_str)
 
-    @wraps(list_directory)
     def list_directory_bound(path: str = ".", show_sizes: bool = False, sort_by: str = "name") -> str:
         """List directory contents with optional size display and sorting."""
         return list_directory(path, working_dir_str, show_sizes, sort_by)
 
-    @wraps(directory_tree)
     def directory_tree_bound(path: str = ".", exclude_patterns: Optional[list[str]] = None) -> str:
         """Generate a recursive directory tree view."""
         return directory_tree(path, working_dir_str, exclude_patterns)
 
-    @wraps(search_files)
     def search_files_bound(pattern: str, path: str = ".", exclude_patterns: Optional[list[str]] = None) -> str:
         """Search for files matching a pattern."""
         return search_files(pattern, working_dir_str, path, exclude_patterns)
 
-    @wraps(get_file_info)
     def get_file_info_bound(path: str) -> str:
         """Get detailed metadata about a file."""
         return get_file_info(path, working_dir_str)
 
-    # Bind working_dir to file operation tools
     tools = [
         read_file_bound,
         read_media_file_bound,
@@ -519,6 +527,8 @@ def create_agent(
 
     logger.info(f"[AgenticDS] Creating plan maker agent with model={DEFAULT_MODEL}")
 
+    plan_maker_compression = create_compression_callback(event_threshold=40, overlap_size=20)
+
     plan_maker_agent = LoopDetectionAgent(
         name="plan_maker_agent",
         model=DEFAULT_MODEL,
@@ -533,12 +543,15 @@ def create_agent(
             ),
         ),
         generate_content_config=get_generate_content_config(temperature=0.6),
+        after_agent_callback=plan_maker_compression,
     )
 
     logger.info("[AgenticDS] Loading plan reviewer agent prompt")
     plan_reviewer_instructions = load_prompt("plan_reviewer")
 
     logger.info(f"[AgenticDS] Creating plan reviewer agent with model={REVIEW_MODEL}")
+
+    plan_reviewer_compression = create_compression_callback(event_threshold=40, overlap_size=20)
 
     plan_reviewer_agent = LoopDetectionAgent(
         name="plan_reviewer_agent",
@@ -554,6 +567,7 @@ def create_agent(
             ),
         ),
         generate_content_config=get_generate_content_config(temperature=0.3),
+        after_agent_callback=plan_reviewer_compression,
     )
 
     high_level_planning_loop = NonEscalatingLoopAgent(
@@ -593,6 +607,15 @@ def create_agent(
 
     logger.info(f"[AgenticDS] Creating criteria checker agent with model={REVIEW_MODEL}")
 
+    criteria_checker_compression = create_compression_callback(event_threshold=40, overlap_size=20)
+    
+    # Combine compression callback with criteria checker callback
+    async def combined_criteria_callback(callback_context):
+        # Run criteria checker callback first
+        criteria_checker_callback(callback_context)
+        # Then run compression callback (async)
+        await criteria_checker_compression(callback_context)
+
     success_criteria_checker = LoopDetectionAgent(
         name="success_criteria_checker",
         model=REVIEW_MODEL,
@@ -601,7 +624,7 @@ def create_agent(
         tools=tools,  # NEEDS TOOLS to inspect files
         output_schema=CRITERIA_CHECKER_OUTPUT_SCHEMA,
         output_key="criteria_checker_output",
-        after_agent_callback=criteria_checker_callback,
+        after_agent_callback=combined_criteria_callback,
         generate_content_config=get_generate_content_config(temperature=0.0),
     )
 
@@ -612,6 +635,15 @@ def create_agent(
 
     logger.info(f"[AgenticDS] Creating stage reflector agent with model={DEFAULT_MODEL}")
 
+    stage_reflector_compression = create_compression_callback(event_threshold=40, overlap_size=20)
+    
+    # Combine compression callback with stage reflector callback
+    async def combined_reflector_callback(callback_context):
+        # Run stage reflector callback first
+        stage_reflector_callback(callback_context)
+        # Then run compression callback (async)
+        await stage_reflector_compression(callback_context)
+
     stage_reflector = LoopDetectionAgent(
         name="stage_reflector",
         model=DEFAULT_MODEL,
@@ -620,7 +652,7 @@ def create_agent(
         tools=tools,  # NEEDS TOOLS for context
         output_schema=STAGE_REFLECTOR_OUTPUT_SCHEMA,
         output_key="stage_reflector_output",
-        after_agent_callback=stage_reflector_callback,
+        after_agent_callback=combined_reflector_callback,
         generate_content_config=get_generate_content_config(temperature=0.4),
     )
 
@@ -680,27 +712,18 @@ def create_app(
     # Create the root agent
     root_agent = create_agent(working_dir=working_dir, mcp_servers=mcp_servers)
 
-    # Configure context compression with aggressive settings
-    compression_config = EventsCompactionConfig(
-        summarizer=None,  # Will auto-create LlmEventSummarizer with agent's model
-        compaction_interval=3,  # Compress every 3 invocations
-        overlap_size=2,  # Keep 2 invocations overlap for context
-    )
-
     # Configure context caching (just creating the config enables caching)
     cache_config = ContextCacheConfig()
 
-    # Create App with all features
+    # Create App with context caching
+    # Note: Event compression is now handled via custom callbacks
     app = App(
         name="agentic-data-scientist",
         root_agent=root_agent,
-        events_compaction_config=compression_config,
         context_cache_config=cache_config,
     )
 
-    logger.info("[AgenticDS] Created App with context compression and caching enabled")
-    logger.info(
-        f"[AgenticDS] Compression: interval={compression_config.compaction_interval}, overlap={compression_config.overlap_size}"
-    )
+    logger.info("[AgenticDS] Created App with context caching enabled")
+    logger.info("[AgenticDS] Event compression will be handled via custom callbacks")
 
     return app
