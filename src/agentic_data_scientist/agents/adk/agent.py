@@ -420,20 +420,67 @@ def create_agent(
 
     logger.info(f"[AgenticDS] Creating ADK agent with working_dir={working_dir}")
 
-    # Get MCP toolsets using ADK's MCPToolset
-    from agentic_data_scientist.mcp import get_mcp_toolsets
+    # Create local tools with working_dir bound via wrapper functions
+    from functools import wraps
 
-    # Get toolsets (MCPToolset handles connection management automatically)
-    mcp_toolsets = []
-    try:
-        mcp_toolsets = get_mcp_toolsets(working_dir=str(working_dir))
-        logger.info(f"[AgenticDS] Configured {len(mcp_toolsets)} MCP toolsets")
-    except Exception as e:
-        logger.warning(f"[AgenticDS] Failed to configure MCP toolsets: {e}")
+    from agentic_data_scientist.tools import (
+        directory_tree,
+        fetch_url,
+        get_file_info,
+        list_directory,
+        read_file,
+        read_media_file,
+        search_files,
+    )
+
+    # Create wrapper functions that bind working_dir while preserving function metadata
+    working_dir_str = str(working_dir)
+
+    @wraps(read_file)
+    def read_file_bound(path: str, head: Optional[int] = None, tail: Optional[int] = None) -> str:
+        """Read file contents with optional head/tail line limits."""
+        return read_file(path, working_dir_str, head, tail)
+
+    @wraps(read_media_file)
+    def read_media_file_bound(path: str) -> str:
+        """Read binary/media files and return base64 encoded data."""
+        return read_media_file(path, working_dir_str)
+
+    @wraps(list_directory)
+    def list_directory_bound(path: str = ".", show_sizes: bool = False, sort_by: str = "name") -> str:
+        """List directory contents with optional size display and sorting."""
+        return list_directory(path, working_dir_str, show_sizes, sort_by)
+
+    @wraps(directory_tree)
+    def directory_tree_bound(path: str = ".", exclude_patterns: Optional[list[str]] = None) -> str:
+        """Generate a recursive directory tree view."""
+        return directory_tree(path, working_dir_str, exclude_patterns)
+
+    @wraps(search_files)
+    def search_files_bound(pattern: str, path: str = ".", exclude_patterns: Optional[list[str]] = None) -> str:
+        """Search for files matching a pattern."""
+        return search_files(pattern, working_dir_str, path, exclude_patterns)
+
+    @wraps(get_file_info)
+    def get_file_info_bound(path: str) -> str:
+        """Get detailed metadata about a file."""
+        return get_file_info(path, working_dir_str)
+
+    # Bind working_dir to file operation tools
+    tools = [
+        read_file_bound,
+        read_media_file_bound,
+        list_directory_bound,
+        directory_tree_bound,
+        search_files_bound,
+        get_file_info_bound,
+        fetch_url,  # No working_dir needed for web fetch
+    ]
+    logger.info(f"[AgenticDS] Configured {len(tools)} local tools")
 
     # ------------------------- Implementation Loop -------------------------
 
-    coding_agent, review_agent, review_confirmation = make_implementation_agents(str(working_dir), mcp_toolsets)
+    coding_agent, review_agent, review_confirmation = make_implementation_agents(str(working_dir), tools)
 
     # LoopAgent wrapper for implementation
     implementation_loop = NonEscalatingLoopAgent(
@@ -455,7 +502,7 @@ def create_agent(
         model=DEFAULT_MODEL,
         description="Summarizes results into a comprehensive pure text report.",
         instruction=summary_agent_instructions,
-        tools=mcp_toolsets,  # Needs tools to read files and write summary
+        tools=tools,  # Needs tools to read files
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,
@@ -477,7 +524,7 @@ def create_agent(
         model=DEFAULT_MODEL,
         description="Plan maker agent - creates high-level plans for complex tasks.",
         instruction=plan_maker_instructions,
-        tools=mcp_toolsets,
+        tools=tools,
         output_key="high_level_plan",
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
@@ -498,7 +545,7 @@ def create_agent(
         model=REVIEW_MODEL,
         description="Plan reviewer agent - reviews high-level plans for completeness and correctness.",
         instruction=plan_reviewer_instructions,
-        tools=mcp_toolsets,
+        tools=tools,
         output_key="plan_review_feedback",
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
@@ -551,7 +598,7 @@ def create_agent(
         model=REVIEW_MODEL,
         description="Checks which high-level success criteria have been met.",
         instruction=criteria_checker_instructions,
-        tools=mcp_toolsets,  # NEEDS TOOLS to inspect files
+        tools=tools,  # NEEDS TOOLS to inspect files
         output_schema=CRITERIA_CHECKER_OUTPUT_SCHEMA,
         output_key="criteria_checker_output",
         after_agent_callback=criteria_checker_callback,
@@ -570,7 +617,7 @@ def create_agent(
         model=DEFAULT_MODEL,
         description="Reflects on and adapts remaining implementation stages.",
         instruction=stage_reflector_instructions,
-        tools=mcp_toolsets,  # NEEDS TOOLS for context
+        tools=tools,  # NEEDS TOOLS for context
         output_schema=STAGE_REFLECTOR_OUTPUT_SCHEMA,
         output_key="stage_reflector_output",
         after_agent_callback=stage_reflector_callback,

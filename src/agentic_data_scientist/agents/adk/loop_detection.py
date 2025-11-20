@@ -75,6 +75,35 @@ class LoopDetectionAgent(LlmAgent):
         self._event_count = 0
         self._partial_buffer = ""
 
+    def _maybe_save_output_to_state(self, event: Event) -> None:
+        """
+        Safely save output to state using parent class method.
+        
+        This wraps the parent class's private method with proper error handling.
+        We need to call the parent's state-saving logic to maintain consistency
+        with LlmAgent behavior, but use name mangling carefully as this is a
+        private API that may change.
+        
+        Parameters
+        ----------
+        event : Event
+            The event to potentially save to state
+        """
+        try:
+            # Try to call the parent's private method using name mangling
+            # This is necessary because we override _run_async_impl and need to
+            # maintain the same state-saving behavior as the parent class
+            if hasattr(self, '_LlmAgent__maybe_save_output_to_state'):
+                self._LlmAgent__maybe_save_output_to_state(event)
+            else:
+                # Fallback: log a warning if the method doesn't exist
+                # This prevents crashes if LlmAgent's internal API changes
+                logger.debug(f"[{self.name}] Parent class state-saving method not found (LlmAgent API may have changed)")
+        except AttributeError as e:
+            logger.warning(f"[{self.name}] Could not save output to state: {e}")
+        except Exception as e:
+            logger.error(f"[{self.name}] Error saving output to state: {e}", exc_info=True)
+
     def _extract_text_from_event(self, event: Event) -> str:
         """Extract text content from an event."""
         if not event.content or not hasattr(event.content, 'parts'):
@@ -237,7 +266,7 @@ class LoopDetectionAgent(LlmAgent):
                             )
 
                             # Save output if configured
-                            self._LlmAgent__maybe_save_output_to_state(warning_event)
+                            self._maybe_save_output_to_state(warning_event)
                             yield warning_event
 
                             # Stop processing this agent only - do NOT set ctx.end_invocation
@@ -245,7 +274,7 @@ class LoopDetectionAgent(LlmAgent):
                             return
 
                 # Process state saving for non-loop events
-                self._LlmAgent__maybe_save_output_to_state(event)
+                self._maybe_save_output_to_state(event)
 
                 # Yield the event upstream
                 yield event
@@ -286,7 +315,7 @@ class LoopDetectionAgent(LlmAgent):
                 partial=False,
                 turn_complete=True,
             )
-            self._LlmAgent__maybe_save_output_to_state(warning_event)
+            self._maybe_save_output_to_state(warning_event)
             yield warning_event
             return
 
@@ -347,7 +376,7 @@ class LoopDetectionAgent(LlmAgent):
                                 turn_complete=True,
                             )
 
-                            self._LlmAgent__maybe_save_output_to_state(warning_event)
+                            self._maybe_save_output_to_state(warning_event)
                             yield warning_event
 
                             # Stop processing this agent only - do NOT set ctx.end_invocation
@@ -355,7 +384,7 @@ class LoopDetectionAgent(LlmAgent):
                             return
 
                 # Process normally
-                self._LlmAgent__maybe_save_output_to_state(event)
+                self._maybe_save_output_to_state(event)
                 yield event
 
                 if ctx.end_invocation:
@@ -386,6 +415,6 @@ class LoopDetectionAgent(LlmAgent):
                 ),
                 turn_complete=True,
             )
-            self._LlmAgent__maybe_save_output_to_state(warning_event)
+            self._maybe_save_output_to_state(warning_event)
             yield warning_event
             return

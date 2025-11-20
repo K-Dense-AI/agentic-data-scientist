@@ -289,70 +289,184 @@ def create_custom_workflow(working_dir, mcp_servers=None):
     return custom_workflow
 ```
 
-## Custom MCP Toolsets
+## Custom Tools
 
-MCP toolsets provide tools to agents. You can create custom toolsets for specialized functionality.
+Tools provide functionality to agents. You can create custom tools by defining simple Python functions.
 
-### Creating Custom MCP Toolsets
+### Creating Custom Tools
+
+Custom tools are regular Python functions that follow a simple signature pattern:
 
 ```python
-from google.adk.tools.mcp_tool.mcp_toolset import (
-    McpToolset,
-    StdioConnectionParams,
-    SseConnectionParams,
-    StdioServerParameters
-)
+from functools import partial
+from pathlib import Path
 
-# Stdio-based MCP server
-def get_database_toolset():
-    """MCP toolset for database operations."""
-    return McpToolset(
-        connection_params=StdioConnectionParams(
-            server_params=StdioServerParameters(
-                command="node",
-                args=["path/to/database-mcp-server.js"],
-                env={"DATABASE_URL": "postgresql://..."}
-            ),
-        ),
-        tool_filter=database_tool_filter,
-    )
+def custom_data_analysis(
+    query: str,
+    working_dir: str,
+) -> str:
+    """
+    Perform custom data analysis.
+    
+    Parameters
+    ----------
+    query : str
+        Analysis query
+    working_dir : str
+        Working directory for security validation
+        
+    Returns
+    -------
+    str
+        Analysis results or error message
+    """
+    try:
+        # Your custom logic here
+        # Validate paths against working_dir for security
+        work_path = Path(working_dir).resolve()
+        
+        # Perform analysis
+        result = f"Analysis for: {query}"
+        return result
+    except Exception as e:
+        return f"Error: {e}"
 
-def database_tool_filter(tool) -> bool:
-    """Filter to only allow read operations."""
-    tool_name = getattr(tool, 'name', None)
-    # Only allow SELECT queries, not INSERT/UPDATE/DELETE
-    allowed = ["query_select", "list_tables", "describe_table"]
-    return tool_name in allowed
-
-# SSE-based (hosted) MCP server  
-def get_api_toolset():
-    """MCP toolset for external API."""
-    return McpToolset(
-        connection_params=SseConnectionParams(
-            url="https://api.example.com/mcp",
-        ),
-    )
+def fetch_custom_api(endpoint: str, timeout: int = 30) -> str:
+    """
+    Fetch data from a custom API.
+    
+    Parameters
+    ----------
+    endpoint : str
+        API endpoint path
+    timeout : int, optional
+        Request timeout in seconds
+        
+    Returns
+    -------
+    str
+        API response or error message
+    """
+    import requests
+    
+    try:
+        base_url = "https://api.example.com"
+        response = requests.get(f"{base_url}/{endpoint}", timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    except Exception as e:
+        return f"Error: {e}"
 ```
 
-### Using Custom Toolsets
+### Adding Custom Tools to Agents
 
-Add your custom toolsets to the workflow:
+Modify the agent creation to include your custom tools:
 
 ```python
-def get_custom_mcp_toolsets(working_dir):
-    """Get all toolsets including custom ones."""
-    from agentic_data_scientist.mcp import get_mcp_toolsets
+from functools import partial
+from agentic_data_scientist.agents.adk.agent import create_agent
+from agentic_data_scientist.tools import (
+    read_file,
+    list_directory,
+    fetch_url,
+)
+
+def create_agent_with_custom_tools(working_dir: str):
+    """Create agent with custom tools."""
     
-    # Get standard toolsets
-    standard_toolsets = get_mcp_toolsets(working_dir)
+    # Import your custom tools
+    from my_tools import custom_data_analysis, fetch_custom_api
     
-    # Add custom toolsets
-    custom_toolsets = [
-        get_database_toolset(),
-        get_api_toolset(),
+    # Create tools list with working_dir bound
+    tools = [
+        # Standard file tools
+        partial(read_file, working_dir=working_dir),
+        partial(list_directory, working_dir=working_dir),
+        
+        # Custom tools
+        partial(custom_data_analysis, working_dir=working_dir),
+        
+        # Web tools (no working_dir needed)
+        fetch_url,
+        fetch_custom_api,
     ]
     
-    return standard_toolsets + custom_toolsets
+    # Create agent with custom tools
+    # Note: You'll need to modify agent.py to accept tools parameter
+    # or directly instantiate agents with your tools list
+    return tools
+```
+
+### Tool Design Best Practices
+
+1. **Return String Results**: Tools should return string results or error messages for compatibility with ADK
+2. **Include Security Parameters**: File operation tools should include `working_dir` parameter
+3. **Handle Errors Gracefully**: Return error messages as strings instead of raising exceptions
+4. **Use Type Hints**: Include type hints for all parameters and return values
+5. **Write Docstrings**: Use NumPy-style docstrings for documentation
+6. **Keep It Simple**: Each tool should do one thing well
+
+### Example: Custom Database Tool
+
+```python
+from functools import partial
+import sqlite3
+from pathlib import Path
+
+def query_database(
+    query: str,
+    working_dir: str,
+    db_name: str = "data.db",
+) -> str:
+    """
+    Execute a read-only SQL query on a database.
+    
+    Parameters
+    ----------
+    query : str
+        SQL query (SELECT only)
+    working_dir : str
+        Working directory containing the database
+    db_name : str, optional
+        Database filename, default "data.db"
+        
+    Returns
+    -------
+    str
+        Query results as formatted string
+    """
+    try:
+        # Security: Validate database is in working_dir
+        work_path = Path(working_dir).resolve()
+        db_path = (work_path / db_name).resolve()
+        
+        if not db_path.is_relative_to(work_path):
+            return f"Error: Database must be in working directory"
+        
+        # Security: Only allow SELECT queries
+        if not query.strip().upper().startswith("SELECT"):
+            return "Error: Only SELECT queries allowed"
+        
+        # Execute query
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(query)
+        results = cursor.fetchall()
+        conn.close()
+        
+        # Format results
+        if not results:
+            return "No results found"
+        
+        # Simple formatting
+        return "\n".join(str(row) for row in results)
+        
+    except Exception as e:
+        return f"Error executing query: {e}"
+
+# Usage in agent configuration
+tools = [
+    partial(query_database, working_dir="/path/to/session"),
+]
 ```
 
 ## Custom Event Handlers

@@ -392,15 +392,28 @@ class StageOrchestratorAgent(BaseAgent):
                 session = ctx.session
                 # Check if we have an app with compression config
                 if hasattr(ctx, 'session_service'):
-                    # Manually trigger compression
-                    from google.adk.apps.compaction import _run_compaction_for_sliding_window
-
-                    # Get the runner's app from state
-                    if "app_instance" in state:
-                        app = state["app_instance"]
-                        if app and app.events_compaction_config:
-                            await _run_compaction_for_sliding_window(app, session, ctx.session_service)
-                            logger.info(f"[StageOrchestrator] ✓ Proactive compression completed for stage {stage_idx}")
+                    # Try to manually trigger compression using private ADK API
+                    # Note: This uses a private module that may change in future ADK versions
+                    try:
+                        from google.adk.apps.compaction import _run_compaction_for_sliding_window
+                        
+                        # Get the runner's app from state
+                        if "app_instance" in state:
+                            app = state["app_instance"]
+                            if app and hasattr(app, 'events_compaction_config') and app.events_compaction_config:
+                                await _run_compaction_for_sliding_window(app, session, ctx.session_service)
+                                logger.info(f"[StageOrchestrator] ✓ Proactive compression completed for stage {stage_idx}")
+                            else:
+                                logger.debug(f"[StageOrchestrator] No compression config available for app")
+                        else:
+                            logger.debug(f"[StageOrchestrator] No app_instance in state for proactive compression")
+                    except ImportError as import_err:
+                        # Private compaction module not available (ADK API may have changed)
+                        logger.debug(
+                            f"[StageOrchestrator] Cannot import private compaction module (ADK API may have changed): {import_err}"
+                        )
+            except AttributeError as e:
+                logger.warning(f"[StageOrchestrator] Proactive compression failed (attribute error): {e}")
             except Exception as e:
                 logger.warning(f"[StageOrchestrator] Proactive compression failed: {e}")
 

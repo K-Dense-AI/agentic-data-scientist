@@ -55,7 +55,7 @@ def trim_history_to_recent_events(callback_context: CallbackContext, max_events:
         logger.info(f"[DEBUG] After trimming: {len(events)} events remain")
 
 
-def make_implementation_agents(working_dir: str, mcp_toolsets: list):
+def make_implementation_agents(working_dir: str, tools: list):
     """
     Create the implementation agents (coding + review + confirmation).
 
@@ -63,15 +63,15 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
     ----------
     working_dir : str
         Working directory for the session
-    mcp_toolsets : list
-        List of MCPToolset instances available to agents
+    tools : list
+        List of tool functions available to agents
 
     Returns
     -------
     tuple
         (coding_agent, review_agent, review_confirmation_agent)
     """
-    logger.info(f"[AgenticDS] Initializing implementation agents with {len(mcp_toolsets)} MCP toolsets")
+    logger.info(f"[AgenticDS] Initializing implementation agents with {len(tools)} tools")
 
     # Always use ClaudeCodeAgent for coding
     from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
@@ -94,7 +94,7 @@ def make_implementation_agents(working_dir: str, mcp_toolsets: list):
         description="Reviews implementation and provides feedback or approval.",
         instruction=review_prompt,
         model=REVIEW_MODEL,
-        tools=mcp_toolsets,
+        tools=tools,
         planner=BuiltInPlanner(
             thinking_config=types.ThinkingConfig(
                 include_thoughts=True,

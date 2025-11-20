@@ -26,6 +26,7 @@ dependencies = [
     "jinja2>=3.1.0",
     "mcp>=1.0.0",
     "litellm>=1.0.0",
+    "requests>=2.32.5",
 ]
 
 [project.optional-dependencies]
@@ -65,4 +66,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
 
