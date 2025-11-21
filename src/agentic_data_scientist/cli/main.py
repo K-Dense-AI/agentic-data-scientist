@@ -5,11 +5,15 @@ Simple command-line interface for running Agentic Data Scientist agents.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
 
 import click
+
+from agentic_data_scientist import DataScientist
+
 
 # Suppress third-party library console output early, before importing our modules
 # This prevents libraries like LiteLLM from setting up their own console handlers
@@ -18,21 +22,19 @@ for lib_name in ['LiteLLM', 'litellm', 'httpx', 'httpcore', 'openai', 'anthropic
     lib_logger.setLevel(logging.WARNING)  # Only warnings and above
     lib_logger.propagate = False  # Don't propagate to root logger yet
 
-# Configure LiteLLM to suppress its own logging output
-import os
+
 os.environ['LITELLM_LOG'] = 'ERROR'  # Only show errors from LiteLLM
 
 # Try to suppress LiteLLM's verbose output if the module is available
 try:
     import litellm
+
     litellm.suppress_debug_info = True
     litellm.drop_params = True
     litellm.turn_off_message_logging = True
 except (ImportError, AttributeError):
     # LiteLLM not installed yet or attributes don't exist, will be configured later
     pass
-
-from agentic_data_scientist import DataScientist
 
 
 logger = logging.getLogger(__name__)
@@ -87,8 +89,8 @@ def main(
     """
     Run Agentic Data Scientist with a query.
 
-    IMPORTANT: You must specify --mode to choose between orchestrated (with planning) 
-    or simple (direct coding) execution. This ensures you're always aware of the 
+    IMPORTANT: You must specify --mode to choose between orchestrated (with planning)
+    or simple (direct coding) execution. This ensures you're always aware of the
     complexity and API cost of your analysis.
 
     MODE (REQUIRED):
@@ -194,43 +196,41 @@ def main(
             working_dir=working_dir_to_use,
             auto_cleanup=auto_cleanup,
         )
-        
+
         # Configure logging to file
         if log_file:
             log_path = Path(log_file)
         else:
             # Default to hidden file in working directory
             log_path = Path(core.working_dir) / ".agentic_ds.log"
-        
+
         # Create parent directories if needed
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Configure file handler for all logs
         file_handler = logging.FileHandler(log_path, mode='w')
         file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
-        file_handler.setFormatter(
-            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        )
-        
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
         # Configure root logger - file only, remove any default console handlers
         root_logger = logging.getLogger()
         root_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
         # Remove existing handlers (like default StreamHandler)
         root_logger.handlers.clear()
         root_logger.addHandler(file_handler)
-        
+
         # Configure console handler for important user-facing messages
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(
             logging.Formatter('%(message)s')  # Simpler format for console
         )
-        
+
         # Add console handler only to agentic_data_scientist loggers
         app_logger = logging.getLogger('agentic_data_scientist')
         app_logger.addHandler(console_handler)
         app_logger.propagate = True  # Still send to root logger (file)
-        
+
         # Re-enable propagation for third-party libraries so they go to log file
         # but keep them off the console
         for lib_name in ['LiteLLM', 'litellm', 'httpx', 'httpcore', 'openai', 'anthropic', 'google_adk']:
@@ -238,16 +238,17 @@ def main(
             lib_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
             lib_logger.handlers.clear()  # Remove any console handlers
             lib_logger.propagate = True  # Send to root logger (file only)
-        
+
         # Re-apply LiteLLM suppression settings in case it was imported
         try:
             import litellm
+
             litellm.suppress_debug_info = True
             litellm.drop_params = True
             litellm.turn_off_message_logging = True
         except (ImportError, AttributeError):
             pass
-        
+
         # Display working directory information
         if temp_dir:
             click.echo(f"Working directory (temporary): {core.working_dir}")
@@ -258,10 +259,10 @@ def main(
                 click.echo("Files will be cleaned up after completion")
             else:
                 click.echo("Files will be preserved after completion")
-        
+
         click.echo(f"Logs: {log_path}")
         click.echo("")
-        
+
     except Exception as e:
         click.echo(f"Error initializing Agentic Data Scientist: {e}", err=True)
         sys.exit(1)

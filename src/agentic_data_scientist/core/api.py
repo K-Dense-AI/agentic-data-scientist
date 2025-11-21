@@ -7,7 +7,6 @@ with optional conversation context and file handling.
 
 import asyncio
 import logging
-import tempfile
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime

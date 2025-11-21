@@ -15,7 +15,6 @@ from google.adk.agents import InvocationContext, LoopAgent, SequentialAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.apps import App
-from google.adk.apps.app import EventsCompactionConfig
 from google.adk.events import Event
 from google.adk.planners import BuiltInPlanner
 from google.adk.utils.context_utils import Aclosing
@@ -264,7 +263,7 @@ def criteria_checker_callback(callback_context: CallbackContext):
             status = "✅ MET" if update["met"] else "❌ NOT MET"
             criteria_text = criteria[idx].get("criteria", "Unknown")
             evidence_text = update["evidence"]
-            
+
             logger.info(f"[CriteriaChecker] Criterion {idx}: {status}")
             logger.info(f"[CriteriaChecker]   └─ Criteria: {criteria_text}")
             logger.info(f"[CriteriaChecker]   └─ Evidence: {evidence_text}")
@@ -280,7 +279,7 @@ def criteria_checker_callback(callback_context: CallbackContext):
             f"[CriteriaChecker] Too many invalid updates ({invalid_updates}/{len(updates)}) - "
             "criteria check may be unreliable"
         )
-    
+
     # Log summary of all criteria statuses
     met_count = sum(1 for c in criteria if c.get("met", False))
     logger.info(f"[CriteriaChecker] Summary: {met_count}/{len(criteria)} criteria met")
@@ -602,7 +601,7 @@ def create_agent(
     logger.info(f"[AgenticDS] Creating criteria checker agent with model={REVIEW_MODEL}")
 
     criteria_checker_compression = create_compression_callback(event_threshold=40, overlap_size=20)
-    
+
     # Combine compression callback with criteria checker callback
     async def combined_criteria_callback(callback_context):
         # Run criteria checker callback first
@@ -630,7 +629,7 @@ def create_agent(
     logger.info(f"[AgenticDS] Creating stage reflector agent with model={DEFAULT_MODEL}")
 
     stage_reflector_compression = create_compression_callback(event_threshold=40, overlap_size=20)
-    
+
     # Combine compression callback with stage reflector callback
     async def combined_reflector_callback(callback_context):
         # Run stage reflector callback first

@@ -7,7 +7,7 @@ for the Claude Code agent.
 
 import logging
 from string import Template
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ Claude Agent SDK has a 1MB buffer limit for tool responses. To prevent buffer ov
 
 Violating these constraints will cause "JSON message exceeded maximum buffer size" errors.
 """
-    
+
     result += file_handling_constraints
 
     return result
@@ -133,18 +133,18 @@ def get_claude_context(
     """
     # Format optional context sections
     context_sections = []
-    
+
     # 1. ANALYSIS CONTEXT SECTION
     if original_request:
         context_sections.append("## ANALYSIS CONTEXT\n")
-        
+
         # Truncate if too long
         MAX_REQUEST_LENGTH = 2000
         truncated_request = original_request
         if len(original_request) > MAX_REQUEST_LENGTH:
             truncated_request = original_request[:MAX_REQUEST_LENGTH] + "\n[... truncated ...]"
         context_sections.append(f"### Original Request\n{truncated_request}\n\n")
-    
+
     # 2. COMPLETED WORK SECTION
     if completed_stages:
         context_sections.append("## COMPLETED WORK\n")
@@ -159,7 +159,7 @@ def get_claude_context(
                     stage_summary = stage_summary[:300] + "..."
                 context_sections.append(f"- **{stage_title}**: {stage_summary}\n")
         context_sections.append("\n")
-    
+
     # 3. FULL ANALYSIS PLAN SECTION
     if all_stages:
         context_sections.append("## FULL ANALYSIS PLAN\n")
@@ -169,9 +169,11 @@ def get_claude_context(
                 stage_index = stage.get('index', 0)
                 stage_title = stage.get('title', 'Unknown')
                 is_completed = stage.get('completed', False)
-                is_current = not is_completed and (not completed_stages or 
-                            all(c.get('stage_index', -1) != stage_index for c in completed_stages if isinstance(c, dict)))
-                
+                is_current = not is_completed and (
+                    not completed_stages
+                    or all(c.get('stage_index', -1) != stage_index for c in completed_stages if isinstance(c, dict))
+                )
+
                 status = ""
                 if is_completed:
                     status = " [COMPLETED]"
@@ -179,7 +181,7 @@ def get_claude_context(
                     status = " [CURRENT - IMPLEMENT THIS]"
                 else:
                     status = " [UPCOMING]"
-                
+
                 context_sections.append(f"{stage_index + 1}. **{stage_title}**{status}\n")
                 # Include brief description for upcoming stages only
                 if not is_completed and not is_current:
@@ -188,7 +190,7 @@ def get_claude_context(
                         stage_desc = stage_desc[:200] + "..."
                     context_sections.append(f"   {stage_desc}\n")
         context_sections.append("\n")
-    
+
     # Truncate plan if too long
     MAX_PLAN_LENGTH = 100000
     truncated_plan = implementation_plan
@@ -207,7 +209,7 @@ def get_claude_context(
 
     # Build the full context with optional sections
     context_prefix = "".join(context_sections) if context_sections else ""
-    
+
     context = f"""{context_prefix}## YOUR CURRENT TASK
 
 Execute the following stage implementation COMPLETELY and THOROUGHLY.

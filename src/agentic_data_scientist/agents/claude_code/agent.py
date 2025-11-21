@@ -9,7 +9,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import AsyncGenerator, Optional, Any
+from typing import Any, AsyncGenerator, Optional
 
 from dotenv import load_dotenv
 from google.adk.agents import Agent, InvocationContext
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 def setup_skills_directory(working_dir: str) -> None:
     """
     Clone claude-scientific-skills repository and copy skills to .claude/skills/.
-    
+
     The repository contains a single 'scientific-skills' directory with all skills.
 
     Parameters
@@ -186,7 +186,7 @@ class ClaudeCodeAgent(Agent):
         after_agent_callback : callable, optional
             Callback function to be invoked after the agent completes execution.
             Useful for event compression or post-processing.
-        
+
         Notes
         -----
         Claude Agent SDK has a 1MB JSON buffer limit for tool responses. When reading
@@ -241,7 +241,9 @@ class ClaudeCodeAgent(Agent):
             + "\n\n[... middle section truncated to fit token limits ...]\n\n"
             + summary[-keep_end:]
         )
-        logger.info(f"[Claude Code] [{self.name}] Truncated implementation_summary from {len(summary)} to {len(truncated)} chars")
+        logger.info(
+            f"[Claude Code] [{self.name}] Truncated implementation_summary from {len(summary)} to {len(truncated)} chars"
+        )
         return truncated
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
@@ -307,7 +309,9 @@ class ClaudeCodeAgent(Agent):
 
                 if not task_prompt:
                     error_msg = "No implementation task or plan found in state."
-                    logger.warning(f"[Claude Code] [{self.name}] {error_msg}. Available state keys: {list(state.keys())}")
+                    logger.warning(
+                        f"[Claude Code] [{self.name}] {error_msg}. Available state keys: {list(state.keys())}"
+                    )
                     yield Event(
                         author=self.name,
                         content=types.Content(role="model", parts=[types.Part.from_text(text=f"Error: {error_msg}")]),
@@ -347,7 +351,7 @@ Requirements:
                     "context7": McpHttpServerConfig(
                         url="https://mcp.context7.com/mcp",
                     )
-                }
+                },
             )
 
             yield Event(
@@ -423,7 +427,9 @@ Requirements:
                                 # Map to: Part(text=..., thought=True)
                                 thinking = getattr(block, 'thinking', '')
                                 if thinking:
-                                    logger.info(f"[Claude Code] [ThinkingBlock] {len(thinking)} chars: {thinking[:100]}...")
+                                    logger.info(
+                                        f"[Claude Code] [ThinkingBlock] {len(thinking)} chars: {thinking[:100]}..."
+                                    )
                                     # Create Part with thought flag set to True
                                     # This will be parsed as MessageEvent with is_thought=True
                                     google_parts.append(types.Part(text=thinking, thought=True))
@@ -449,7 +455,9 @@ Requirements:
 
                             else:
                                 # Unknown content block type in AssistantMessage
-                                logger.info(f"[Claude Code] [AssistantMessage] Unknown ContentBlock type: {block_type} - {block}")
+                                logger.info(
+                                    f"[Claude Code] [AssistantMessage] Unknown ContentBlock type: {block_type} - {block}"
+                                )
                                 google_parts.append(types.Part.from_text(text=f"[Unknown block: {block_type}]"))
 
                         # Yield a single Event with all converted Parts from this AssistantMessage
@@ -535,7 +543,9 @@ Requirements:
 
                             else:
                                 # Unknown content block type in UserMessage
-                                logger.info(f"[Claude Code] [UserMessage] Unknown ContentBlock type: {block_type} - {block}")
+                                logger.info(
+                                    f"[Claude Code] [UserMessage] Unknown ContentBlock type: {block_type} - {block}"
+                                )
                                 google_parts.append(types.Part.from_text(text=f"[Unknown user block: {block_type}]"))
 
                         # Yield Event with all converted Parts from this UserMessage
@@ -619,10 +629,7 @@ Requirements:
                     state[self._output_key] = self._truncate_summary(summary)
                     yield Event(
                         author=self.name,
-                        content=types.Content(
-                            role="model",
-                            parts=[types.Part.from_text(text=summary)]
-                        ),
+                        content=types.Content(role="model", parts=[types.Part.from_text(text=summary)]),
                     )
                 else:
                     # Re-raise other exceptions for generic handling

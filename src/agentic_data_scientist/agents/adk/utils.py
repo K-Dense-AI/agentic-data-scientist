@@ -38,10 +38,14 @@ OR_APP_NAME = os.getenv("OR_APP_NAME", "Agentic Data Scientist")
 
 # Export for use in event compression
 __all__ = [
-    'DEFAULT_MODEL', 'REVIEW_MODEL', 
-    'DEFAULT_MODEL_NAME', 'REVIEW_MODEL_NAME',  # Export model name strings
-    'OPENROUTER_API_KEY', 'OPENROUTER_API_BASE', 
-    'get_generate_content_config', 'exit_loop_simple'
+    'DEFAULT_MODEL',
+    'REVIEW_MODEL',
+    'DEFAULT_MODEL_NAME',
+    'REVIEW_MODEL_NAME',  # Export model name strings
+    'OPENROUTER_API_KEY',
+    'OPENROUTER_API_BASE',
+    'get_generate_content_config',
+    'exit_loop_simple',
 ]
 
 # Set up LiteLLM environment for OpenRouter

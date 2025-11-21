@@ -38,18 +38,18 @@ def format_criteria_status(criteria: List[Dict], max_length: int = 80) -> str:
     """
     if not criteria:
         return "  (No criteria defined)"
-    
+
     lines = []
     for c in criteria:
         status = "✅ MET" if c.get("met", False) else "❌ NOT MET"
         criteria_text = c.get("criteria", "Unknown criterion")
-        
+
         # Truncate long criteria text
         if len(criteria_text) > max_length:
             criteria_text = criteria_text[:max_length] + "..."
-        
+
         lines.append(f"  [{status}] Criterion {c.get('index', '?')}: {criteria_text}")
-    
+
     return "\n".join(lines)
 
 
@@ -228,7 +228,7 @@ class StageOrchestratorAgent(BaseAgent):
 
         logger.info(f"[StageOrchestrator] Starting orchestration with {len(stages)} stages")
         logger.info(f"[StageOrchestrator] Success criteria count: {len(criteria)}")
-        
+
         # Log all success criteria at the start for visibility
         logger.info("[StageOrchestrator] Success Criteria (End-State Goals):")
         logger.info(format_criteria_status(criteria))

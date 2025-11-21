@@ -27,10 +27,12 @@ def _truncate_content(content: str, max_content_length: int) -> str:
     """
     if len(content) <= max_content_length:
         return content
-    
+
     original_length = len(content)
     truncated = content[:max_content_length]
-    warning = f"\n\n[Content truncated at {max_content_length:,} characters. Original length: {original_length:,} characters]"
+    warning = (
+        f"\n\n[Content truncated at {max_content_length:,} characters. Original length: {original_length:,} characters]"
+    )
     return truncated + warning
 
 
@@ -53,7 +55,7 @@ def fetch_url(
         Custom User-Agent header, default None (uses requests default)
     max_content_length : int, optional
         Maximum content length in characters before truncation, default 10000
-        
+
         **WARNING: Do not modify max_content_length unless absolutely necessary.
         The default 10,000 character limit prevents token overflow.**
 
@@ -85,12 +87,12 @@ def fetch_url(
         # Validate URL scheme
         if not url.startswith(("http://", "https://")):
             return "Error: Only HTTP and HTTPS URLs are supported"
-        
+
         # Set up headers
         headers = {}
         if user_agent is not None:
             headers["User-Agent"] = user_agent
-        
+
         # Make the request
         response = requests.get(
             url,
@@ -98,14 +100,14 @@ def fetch_url(
             timeout=timeout,
             allow_redirects=True,
         )
-        
+
         # Check for HTTP errors
         response.raise_for_status()
-        
+
         # Apply content length truncation
         content = _truncate_content(response.text, max_content_length)
         return content
-    
+
     except requests.exceptions.Timeout:
         return f"Error: Request timed out after {timeout} seconds"
     except requests.exceptions.ConnectionError:
@@ -116,4 +118,3 @@ def fetch_url(
         return f"Error: Request failed - {e}"
     except Exception as e:
         return f"Error fetching URL: {e}"
-

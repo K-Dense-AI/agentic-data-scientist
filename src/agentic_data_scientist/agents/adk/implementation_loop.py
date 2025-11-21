@@ -76,7 +76,7 @@ def make_implementation_agents(working_dir: str, tools: list):
 
     # Always use ClaudeCodeAgent for coding
     from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
-    
+
     # Create compression callback for coding agent
     coding_compression_callback = create_compression_callback(
         event_threshold=40,

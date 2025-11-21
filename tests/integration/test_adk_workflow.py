@@ -39,7 +39,7 @@ class TestADKWorkflow:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             agent = create_agent(working_dir=tmpdir)
-            
+
             # Verify agent was created successfully
             assert agent is not None
             assert hasattr(agent, 'sub_agents')

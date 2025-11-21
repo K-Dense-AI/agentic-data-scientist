@@ -78,12 +78,12 @@ class LoopDetectionAgent(LlmAgent):
     def _maybe_save_output_to_state(self, event: Event) -> None:
         """
         Safely save output to state using parent class method.
-        
+
         This wraps the parent class's private method with proper error handling.
         We need to call the parent's state-saving logic to maintain consistency
         with LlmAgent behavior, but use name mangling carefully as this is a
         private API that may change.
-        
+
         Parameters
         ----------
         event : Event
@@ -98,7 +98,9 @@ class LoopDetectionAgent(LlmAgent):
             else:
                 # Fallback: log a warning if the method doesn't exist
                 # This prevents crashes if LlmAgent's internal API changes
-                logger.debug(f"[{self.name}] Parent class state-saving method not found (LlmAgent API may have changed)")
+                logger.debug(
+                    f"[{self.name}] Parent class state-saving method not found (LlmAgent API may have changed)"
+                )
         except AttributeError as e:
             logger.warning(f"[{self.name}] Could not save output to state: {e}")
         except Exception as e:
