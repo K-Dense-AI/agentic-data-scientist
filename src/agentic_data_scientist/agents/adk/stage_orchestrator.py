@@ -256,11 +256,6 @@ class StageOrchestratorAgent(BaseAgent):
             # Check exit condition: all criteria met?
             criteria_met_count = sum(1 for c in criteria if c.get("met", False))
             logger.info(f"[StageOrchestrator] Criteria status: {criteria_met_count}/{len(criteria)} met")
-            
-            # Show detailed criteria status if any are not met
-            if criteria_met_count < len(criteria):
-                logger.info("[StageOrchestrator] Current criteria status:")
-                logger.info(format_criteria_status(criteria))
 
             if all(c.get("met", False) for c in criteria):
                 logger.info("[StageOrchestrator] 🎉 All success criteria met! Exiting to summary.")
@@ -354,6 +349,9 @@ class StageOrchestratorAgent(BaseAgent):
             state.pop("review_feedback", None)
 
             # === Run Implementation Loop ===
+            logger.info("")
+            logger.info("")
+            logger.info("")
             logger.info(f"[StageOrchestrator] Running implementation_loop for stage {stage_idx}")
 
             try:
@@ -412,6 +410,9 @@ class StageOrchestratorAgent(BaseAgent):
             state["stage_implementations"] = stage_implementations
 
             # === Run Success Criteria Checker ===
+            logger.info("")
+            logger.info("")
+            logger.info("")
             logger.info(f"[StageOrchestrator] Running criteria_checker after stage {stage_idx}")
 
             try:
@@ -425,10 +426,6 @@ class StageOrchestratorAgent(BaseAgent):
                 logger.info(
                     f"[StageOrchestrator] Criteria status after check: {criteria_met_count}/{len(criteria)} met"
                 )
-                
-                # Show detailed criteria status after checking
-                logger.info("[StageOrchestrator] Updated criteria status:")
-                logger.info(format_criteria_status(criteria))
             except Exception as e:
                 logger.error(
                     f"[StageOrchestrator] Criteria checker failed for stage {stage_idx}: {e}",
@@ -451,6 +448,9 @@ class StageOrchestratorAgent(BaseAgent):
                 yield error_event
 
             # === Run Stage Reflector ===
+            logger.info("")
+            logger.info("")
+            logger.info("")
             logger.info(f"[StageOrchestrator] Running stage_reflector after stage {stage_idx}")
 
             try:

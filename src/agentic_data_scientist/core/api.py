@@ -464,13 +464,15 @@ class DataScientist:
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
-            # Find created files
+            # Find created files (exclude hidden directories like .venv, .claude)
             files_created = []
             if self.working_dir.exists():
                 for file_path in self.working_dir.rglob('*'):
                     if file_path.is_file() and 'user_data' not in file_path.parts:
-                        relative_path = file_path.relative_to(self.working_dir)
-                        files_created.append(str(relative_path))
+                        # Exclude hidden directories (starting with .)
+                        if not any(part.startswith('.') for part in file_path.parts):
+                            relative_path = file_path.relative_to(self.working_dir)
+                            files_created.append(str(relative_path))
 
             # Final completed event
             completed_event = CompletedEvent(
@@ -523,13 +525,15 @@ class DataScientist:
             # Calculate duration
             duration = (datetime.now() - start_time).total_seconds()
 
-            # Find created files
+            # Find created files (exclude hidden directories like .venv, .claude)
             files_created = []
             if self.working_dir.exists():
                 for file_path in self.working_dir.rglob('*'):
                     if file_path.is_file() and 'user_data' not in file_path.parts:
-                        relative_path = file_path.relative_to(self.working_dir)
-                        files_created.append(str(relative_path))
+                        # Exclude hidden directories (starting with .)
+                        if not any(part.startswith('.') for part in file_path.parts):
+                            relative_path = file_path.relative_to(self.working_dir)
+                            files_created.append(str(relative_path))
 
             return Result(
                 session_id=self.session_id,

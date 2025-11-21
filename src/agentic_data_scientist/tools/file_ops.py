@@ -18,6 +18,31 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _truncate_content(content: str, max_content_length: int) -> str:
+    """
+    Truncate content to maximum length and add warning if truncated.
+
+    Parameters
+    ----------
+    content : str
+        The content to potentially truncate
+    max_content_length : int
+        Maximum allowed length in characters
+
+    Returns
+    -------
+    str
+        Original content if under limit, or truncated content with warning message
+    """
+    if len(content) <= max_content_length:
+        return content
+    
+    original_length = len(content)
+    truncated = content[:max_content_length]
+    warning = f"\n\n[Content truncated at {max_content_length:,} characters. Original length: {original_length:,} characters]"
+    return truncated + warning
+
+
 def _validate_path(path: str, working_dir: str) -> Path:
     """
     Validate and resolve a path within the working directory.
@@ -85,6 +110,7 @@ def read_file(
     working_dir: str,
     head: Optional[int] = None,
     tail: Optional[int] = None,
+    max_content_length: int = 10000,
 ) -> str:
     """
     Read the complete contents of a text file.
@@ -99,6 +125,11 @@ def read_file(
         If provided, returns only the first N lines
     tail : int, optional
         If provided, returns only the last N lines
+    max_content_length : int, optional
+        Maximum content length in characters before truncation, default 10000
+        
+        **WARNING: Do not modify max_content_length unless absolutely necessary.
+        The default 10,000 character limit prevents token overflow.**
 
     Returns
     -------
@@ -110,6 +141,7 @@ def read_file(
     - Only files within working_dir can be accessed
     - If both head and tail are provided, tail takes precedence
     - Handles various text encodings automatically
+    - Content exceeding max_content_length will be truncated with a warning message
     """
     logger.info(f"[Tool:read_file] Reading '{path}' (head={head}, tail={tail})")
     try:
@@ -131,6 +163,9 @@ def read_file(
         elif head is not None:
             lines = content.splitlines()
             content = "\n".join(lines[:head])
+        
+        # Apply content length truncation
+        content = _truncate_content(content, max_content_length)
         
         return content
     
@@ -166,6 +201,8 @@ def read_media_file(path: str, working_dir: str) -> str:
     - Returns base64 encoded binary data for transmission
     - MIME type is automatically detected from file extension
     - Supported for images, audio, video, and other binary formats
+    - File size limit: 10 MB (files larger than this will be rejected)
+    - Media files are NOT truncated as partial media files are broken
 
     Examples
     --------
@@ -184,6 +221,13 @@ def read_media_file(path: str, working_dir: str) -> str:
         
         if not file_path.is_file():
             return f"Error: '{path}' is not a file"
+        
+        # Check file size before reading (10 MB limit)
+        MAX_MEDIA_SIZE = 10 * 1024 * 1024  # 10 MB in bytes
+        file_size = file_path.stat().st_size
+        if file_size > MAX_MEDIA_SIZE:
+            size_mb = file_size / (1024 * 1024)
+            return f"Error: Media file exceeds size limit of 10 MB (actual: {size_mb:.1f} MB)"
         
         # Read file as binary and encode to base64
         with open(file_path, "rb") as f:
@@ -214,6 +258,7 @@ def list_directory(
     working_dir: str = "",
     show_sizes: bool = False,
     sort_by: str = "name",
+    max_content_length: int = 10000,
 ) -> str:
     """
     List the contents of a directory.
@@ -228,6 +273,11 @@ def list_directory(
         If True, display file sizes, default False
     sort_by : str, optional
         Sort order: "name" or "size", default "name"
+    max_content_length : int, optional
+        Maximum content length in characters before truncation, default 10000
+        
+        **WARNING: Do not modify max_content_length unless absolutely necessary.
+        The default 10,000 character limit prevents token overflow.**
 
     Returns
     -------
@@ -240,6 +290,7 @@ def list_directory(
     - Files are prefixed with [FILE], directories with [DIR]
     - Sizes are shown in human-readable format (KB, MB, etc.)
     - Hidden files (starting with '.') are included
+    - Output exceeding max_content_length will be truncated with a warning message
     """
     logger.info(f"[Tool:list_directory] Listing '{path}' (show_sizes={show_sizes}, sort_by={sort_by})")
     try:
@@ -294,7 +345,8 @@ def list_directory(
         if show_sizes:
             lines.append(f"Combined size: {_format_size(total_size)}")
         
-        return "\n".join(lines)
+        result = "\n".join(lines)
+        return _truncate_content(result, max_content_length)
     
     except ValueError as e:
         return f"Error: {e}"
@@ -306,6 +358,7 @@ def directory_tree(
     path: str = ".",
     working_dir: str = "",
     exclude_patterns: Optional[list[str]] = None,
+    max_content_length: int = 10000,
 ) -> str:
     """
     Generate a recursive directory tree view.
@@ -318,6 +371,11 @@ def directory_tree(
         Working directory root for security validation
     exclude_patterns : list[str], optional
         List of glob patterns to exclude (e.g., ["*.pyc", "__pycache__"])
+    max_content_length : int, optional
+        Maximum content length in characters before truncation, default 10000
+        
+        **WARNING: Do not modify max_content_length unless absolutely necessary.
+        The default 10,000 character limit prevents token overflow.**
 
     Returns
     -------
@@ -330,6 +388,7 @@ def directory_tree(
     - Returns a JSON structure with nested entries
     - Each entry has "name", "type" (file/directory), and optional "children"
     - Hidden files (starting with '.') are included unless excluded
+    - Output exceeding max_content_length will be truncated with a warning message
 
     Examples
     --------
@@ -430,7 +489,8 @@ def directory_tree(
             return entries
         
         tree_data = build_tree(root_path)
-        return json.dumps(tree_data, indent=2)
+        result = json.dumps(tree_data, indent=2)
+        return _truncate_content(result, max_content_length)
     
     except ValueError as e:
         return f"Error: {e}"
@@ -443,6 +503,7 @@ def search_files(
     working_dir: str,
     path: str = ".",
     exclude_patterns: Optional[list[str]] = None,
+    max_content_length: int = 10000,
 ) -> str:
     """
     Search for files matching a pattern.
@@ -457,6 +518,11 @@ def search_files(
         Directory to search in (relative to working_dir or absolute), default "."
     exclude_patterns : list[str], optional
         List of patterns to exclude from results
+    max_content_length : int, optional
+        Maximum content length in characters before truncation, default 10000
+        
+        **WARNING: Do not modify max_content_length unless absolutely necessary.
+        The default 10,000 character limit prevents token overflow.**
 
     Returns
     -------
@@ -469,6 +535,7 @@ def search_files(
     - Searches recursively through all subdirectories
     - Returns paths relative to the search directory
     - Hidden files are included unless excluded
+    - Output exceeding max_content_length will be truncated with a warning message
 
     Examples
     --------
@@ -526,7 +593,8 @@ def search_files(
             return "No matches found"
         
         matches.sort()
-        return "\n".join(matches)
+        result = "\n".join(matches)
+        return _truncate_content(result, max_content_length)
     
     except ValueError as e:
         return f"Error: {e}"

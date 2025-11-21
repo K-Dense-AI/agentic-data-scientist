@@ -12,11 +12,13 @@ Provide a structured response containing:
 
 1. **Analysis Stages** - Numbered list of high-level stages that logically decompose the request. Each stage should:
    - Represent a meaningful analytical milestone that can be implemented independently, not technical tasks
-   - Include a clear title and a detailed description (2-4 sentences) explaining:
+   - Include a clear title and a detailed description (3-6 sentences) explaining:
      * What needs to be accomplished in this stage
      * Why this stage is important to the overall analysis
+     * Key steps or subtasks that should be addressed within this stage
      * Key considerations or potential challenges
      * What outputs or insights should emerge
+   - Provide enough detail that implementation agents understand both WHAT to do and HOW to approach it
    - Let your data science intuition guide the natural progression of investigation
    - These stages will be implemented one at a time in sequence
    - Be comprehensive enough that implementation agents understand the full scope and rationale

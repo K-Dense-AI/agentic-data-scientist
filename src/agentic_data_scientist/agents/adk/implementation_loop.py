@@ -76,12 +76,19 @@ def make_implementation_agents(working_dir: str, tools: list):
 
     # Always use ClaudeCodeAgent for coding
     from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
+    
+    # Create compression callback for coding agent
+    coding_compression_callback = create_compression_callback(
+        event_threshold=40,
+        overlap_size=20,
+    )
 
     coding_agent = ClaudeCodeAgent(
         name="coding_agent",
         description="A coding agent that uses Claude Code SDK to implement plans.",
         working_dir=working_dir,
         output_key="implementation_summary",
+        after_agent_callback=coding_compression_callback,  # Explicit callback for event compression
     )
 
     # Review Agent - Uses ADK with loop detection

@@ -52,8 +52,21 @@ Demonstrates using Context7 MCP for library documentation:
 - Using Context7 with Claude Code agent
 
 **Requirements:**
-- `CONTEXT7_API_KEY` set in `.env` file
-- `.claude/settings.json` configured (already set up)
+- `CONTEXT7_API_KEY` environment variable
+- Manual configuration in `.claude/settings.json`:
+  ```json
+  {
+    "mcpServers": {
+      "context7": {
+        "command": "npx",
+        "args": ["-y", "@context7/mcp-server"],
+        "env": {
+          "CONTEXT7_API_KEY": "your_key_here"
+        }
+      }
+    }
+  }
+  ```
 
 **Run:**
 ```bash

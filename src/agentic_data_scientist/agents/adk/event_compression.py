@@ -22,9 +22,9 @@ from agentic_data_scientist.agents.adk.utils import DEFAULT_MODEL_NAME, OPENROUT
 logger = logging.getLogger(__name__)
 
 # Default compression settings
-DEFAULT_EVENT_THRESHOLD = 40  # Compress when this many events accumulate
-DEFAULT_OVERLAP_SIZE = 20  # Keep this many recent events uncompressed
-LARGE_TEXT_THRESHOLD = 10000  # Truncate texts larger than this
+DEFAULT_EVENT_THRESHOLD = 40  # Compress when this many events accumulate (more aggressive)
+DEFAULT_OVERLAP_SIZE = 20  # Keep this many recent events uncompressed (smaller window)
+LARGE_TEXT_THRESHOLD = 10000  # Truncate texts larger than this (more aggressive)
 LARGE_TEXT_KEEP = 1000  # Keep only this many chars from large texts
 
 
@@ -165,7 +165,7 @@ Be detailed and specific - this summary replaces the original events, so preserv
         llm_request = LlmRequest(
             model=model_name,
             contents=[genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])],
-            config=genai_types.GenerateContentConfig(temperature=0.3, max_output_tokens=1000),  # Increased for more detailed summaries
+            config=genai_types.GenerateContentConfig(temperature=0.3, max_output_tokens=4000),  # Increased for more detailed summaries
         )
         
         # Call LLM
@@ -244,21 +244,35 @@ async def _compress_session_events(
         invocation_id=events[0].invocation_id if events else None,
     )
     
-    # Append summary event
-    await session_service.append_event(session=session, event=summary_event)
+    # CRITICAL FIX: Build new event list with direct assignment
+    # Keep events before compression range, add summary, keep events after
+    new_events = events[:start_idx] + [summary_event] + events[end_idx:]
     
-    # Remove compressed events
-    events_to_remove = end_idx - start_idx
-    for _ in range(events_to_remove):
-        events.pop(start_idx)
+    # ADDITIONAL FIX: Aggressively truncate remaining events to prevent token overflow
+    # This ensures ALL events in the session stay within reasonable size
+    logger.info(f"[Compression] Truncating remaining {len(new_events)} events for safety")
+    _truncate_large_event_texts(new_events)
+    
+    # Direct assignment to session.events (like working example)
+    session.events = new_events
+    
+    events_removed = end_idx - start_idx
     
     # Calculate approximate token reduction
     summary_tokens_approx = len(summary_text) // 4  # Rough estimate: 1 token ≈ 4 chars
     
+    # Calculate total tokens in remaining events
+    total_chars = 0
+    for evt in session.events:
+        if evt.content and evt.content.parts:
+            for part in evt.content.parts:
+                if hasattr(part, 'text') and part.text:
+                    total_chars += len(part.text)
+    
     logger.warning(
-        f"[Compression] ✓ Compressed {events_to_remove} events (idx {start_idx}:{end_idx}) "
+        f"[Compression] ✓ Compressed {events_removed} events (idx {start_idx}:{end_idx}) "
         f"into 1 summary event (~{summary_tokens_approx} tokens). "
-        f"Total events: {len(events)}"
+        f"Total events: {len(session.events)} (was {len(events)}), ~{total_chars // 4} tokens remaining"
     )
 
 
@@ -474,9 +488,9 @@ async def compress_events_manually(
     ctx : InvocationContext
         Invocation context with session access
     event_threshold : int, optional
-        Minimum events before compression (default: 40)
+        Minimum events before compression (default: 30)
     overlap_size : int, optional
-        Events to keep uncompressed (default: 20)
+        Events to keep uncompressed (default: 10)
     model_name : str, optional
         Model name string for summarization (default: DEFAULT_MODEL_NAME)
     """
@@ -541,4 +555,69 @@ async def compress_events_manually(
         
     except Exception as e:
         logger.error(f"[ManualCompression] Failed: {e}", exc_info=True)
+
+
+def create_hard_limit_callback(max_events: int = 50):
+    """
+    Create a hard limit callback that keeps only the most recent N events.
+    
+    This is a safety mechanism that works alongside compression to ensure
+    the event list never grows beyond a maximum size. Unlike compression,
+    this simply discards old events without summarization.
+    
+    This should be used as a LAST RESORT when compression alone isn't
+    sufficient to control context size.
+    
+    Parameters
+    ----------
+    max_events : int, optional
+        Maximum number of events to keep (default: 50)
+    
+    Returns
+    -------
+    Callable
+        Callback function for after_agent_callback
+        
+    Examples
+    --------
+    >>> callback = create_hard_limit_callback(max_events=50)
+    >>> agent = LlmAgent(
+    ...     name="my_agent",
+    ...     instruction="...",
+    ...     after_agent_callback=callback,
+    ... )
+    """
+    def hard_limit_callback(callback_context: CallbackContext):
+        """
+        Trim history to keep only the most recent events.
+        
+        This is similar to the working example provided - it directly
+        assigns to session.events to ensure changes take effect.
+        """
+        session = callback_context._invocation_context.session
+        events = session.events
+        
+        logger.info(f"[HardLimit] Checking event count: {len(events)} events, max={max_events}")
+        
+        if len(events) > max_events:
+            original_count = len(events)
+            discarded_count = original_count - max_events
+            
+            # Get event authors for logging
+            discarded_events = events[:discarded_count]
+            discarded_authors = [getattr(e, 'author', 'unknown') for e in discarded_events[:5]]
+            
+            # CRITICAL: Direct assignment like working example
+            session.events = events[-max_events:]
+            
+            logger.warning(
+                f"[HardLimit] Trimmed from {original_count} to {len(session.events)} events. "
+                f"Discarded {discarded_count} events, first 5 authors: {discarded_authors}"
+            )
+        else:
+            logger.debug(f"[HardLimit] No trimming needed: {len(events)} <= {max_events}")
+        
+        return None
+    
+    return hard_limit_callback
 

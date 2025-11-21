@@ -9,7 +9,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Any
 
 from dotenv import load_dotenv
 from google.adk.agents import Agent, InvocationContext
@@ -43,7 +43,9 @@ logger = logging.getLogger(__name__)
 
 def setup_skills_directory(working_dir: str) -> None:
     """
-    Clone claude-scientific-skills and copy to .claude/skills/.
+    Clone claude-scientific-skills repository and copy skills to .claude/skills/.
+    
+    The repository contains a single 'scientific-skills' directory with all skills.
 
     Parameters
     ----------
@@ -64,32 +66,32 @@ def setup_skills_directory(working_dir: str) -> None:
         tmp_repo = Path(tmpdir) / "claude-scientific-skills"
 
         try:
-            logger.info(f"Cloning claude-scientific-skills to {tmp_repo}")
+            logger.info(f"[Claude Code] Cloning claude-scientific-skills to {tmp_repo}")
             subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(tmp_repo)], check=True, capture_output=True, timeout=60
             )
 
-            # Copy scientific-databases and scientific-packages
-            for source_folder in ["scientific-databases", "scientific-packages"]:
-                source_path = tmp_repo / source_folder
-                if source_path.exists():
-                    # Copy each skill directory
-                    for skill_dir in source_path.iterdir():
-                        if skill_dir.is_dir():
-                            dest_path = skills_dir / skill_dir.name
-                            if dest_path.exists():
-                                shutil.rmtree(dest_path)
-                            shutil.copytree(skill_dir, dest_path)
-                            logger.info(f"Copied skill: {skill_dir.name}")
+            # Copy scientific-skills directory
+            source_path = tmp_repo / "scientific-skills"
+            if source_path.exists():
+                # Copy each skill directory
+                for skill_dir in source_path.iterdir():
+                    if skill_dir.is_dir():
+                        dest_path = skills_dir / skill_dir.name
+                        if dest_path.exists():
+                            shutil.rmtree(dest_path)
+                        shutil.copytree(skill_dir, dest_path)
+            else:
+                logger.warning(f"[Claude Code] scientific-skills directory not found in {tmp_repo}")
 
-            logger.info(f"Skills setup complete in {skills_dir}")
+            logger.info(f"[Claude Code] Skills setup complete in {skills_dir}")
 
         except subprocess.TimeoutExpired:
-            logger.warning("Git clone timed out - skills may not be available")
+            logger.warning("[Claude Code] Git clone timed out - skills may not be available")
         except subprocess.CalledProcessError as e:
-            logger.warning(f"Failed to clone skills repo: {e.stderr.decode()}")
+            logger.warning(f"[Claude Code] Failed to clone skills repo: {e.stderr.decode()}")
         except Exception as e:
-            logger.warning(f"Error setting up skills: {e}")
+            logger.warning(f"[Claude Code] Error setting up skills: {e}")
 
 
 def setup_working_directory(working_dir: str) -> None:
@@ -117,7 +119,7 @@ def setup_working_directory(working_dir: str) -> None:
     pyproject_path = working_path / "pyproject.toml"
     if not pyproject_path.exists():
         pyproject_path.write_text(get_minimal_pyproject())
-        logger.info(f"Created pyproject.toml in {working_dir}")
+        logger.info(f"[Claude Code] Created pyproject.toml in {working_dir}")
 
     # Create initial README.md
     readme_path = working_path / "README.md"
@@ -137,7 +139,7 @@ Working Directory: `{working_dir}`
 _This file will be updated as the implementation progresses._
 """
         readme_path.write_text(readme_content)
-        logger.info(f"Created README.md in {working_dir}")
+        logger.info(f"[Claude Code] Created README.md in {working_dir}")
 
 
 class ClaudeCodeAgent(Agent):
@@ -164,6 +166,8 @@ class ClaudeCodeAgent(Agent):
         description: Optional[str] = None,
         working_dir: Optional[str] = None,
         output_key: str = "implementation_summary",
+        after_agent_callback: Optional[Any] = None,
+        **kwargs: Any,
     ):
         """
         Initialize the Claude Code agent.
@@ -178,6 +182,15 @@ class ClaudeCodeAgent(Agent):
             Working directory for the agent
         output_key : str
             State key where the final implementation summary will be stored.
+        after_agent_callback : callable, optional
+            Callback function to be invoked after the agent completes execution.
+            Useful for event compression or post-processing.
+        
+        Notes
+        -----
+        Claude Agent SDK has a 1MB JSON buffer limit for tool responses. When reading
+        large files (>1MB), the agent will fail with a JSON buffer overflow error.
+        Instructions are provided to Claude to avoid reading large files directly.
         """
         # Get model from environment variable
         model = os.getenv("CODING_MODEL", "claude-sonnet-4-5-20250929")
@@ -186,6 +199,8 @@ class ClaudeCodeAgent(Agent):
             name=name,
             description=description or "A coding agent that uses Claude Agent SDK to implement plans",
             model=model,
+            after_agent_callback=after_agent_callback,
+            **kwargs,
         )
         self._working_dir = working_dir
         self._output_key = output_key
@@ -225,7 +240,7 @@ class ClaudeCodeAgent(Agent):
             + "\n\n[... middle section truncated to fit token limits ...]\n\n"
             + summary[-keep_end:]
         )
-        logger.info(f"[{self.name}] Truncated implementation_summary from {len(summary)} to {len(truncated)} chars")
+        logger.info(f"[Claude Code] [{self.name}] Truncated implementation_summary from {len(summary)} to {len(truncated)} chars")
         return truncated
 
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
@@ -262,9 +277,15 @@ class ClaudeCodeAgent(Agent):
                 ),
             )
 
-            # Generate the prompt
+            # Generate the prompt with full context (but NOT success criteria - don't show the "answers")
             if stage_info:
-                prompt = get_claude_context(implementation_plan=stage_info, working_dir=working_dir)
+                prompt = get_claude_context(
+                    implementation_plan=stage_info,
+                    working_dir=working_dir,
+                    original_request=state.get("original_user_input", ""),
+                    completed_stages=state.get("stage_implementations", []),
+                    all_stages=state.get("high_level_stages", []),
+                )
             else:
                 # Fallback: Try multiple state keys to find the task
                 task_prompt = (
@@ -285,7 +306,7 @@ class ClaudeCodeAgent(Agent):
 
                 if not task_prompt:
                     error_msg = "No implementation task or plan found in state."
-                    logger.warning(f"[{self.name}] {error_msg}. Available state keys: {list(state.keys())}")
+                    logger.warning(f"[Claude Code] [{self.name}] {error_msg}. Available state keys: {list(state.keys())}")
                     yield Event(
                         author=self.name,
                         content=types.Content(role="model", parts=[types.Part.from_text(text=f"Error: {error_msg}")]),
@@ -390,14 +411,14 @@ Requirements:
                                 if text:
                                     output_lines.append(text)
                                     google_parts.append(types.Part.from_text(text=text))
-                                    logger.info(f"[TextBlock] {len(text)} chars")
+                                    logger.info(f"[Claude Code] [TextBlock] {len(text)} chars")
 
                             elif block_type == "ThinkingBlock":
                                 # Extended thinking (if enabled)
                                 # Map to: Part(text=..., thought=True)
                                 thinking = getattr(block, 'thinking', '')
                                 if thinking:
-                                    logger.info(f"[ThinkingBlock] {len(thinking)} chars: {thinking[:100]}...")
+                                    logger.info(f"[Claude Code] [ThinkingBlock] {len(thinking)} chars: {thinking[:100]}...")
                                     # Create Part with thought flag set to True
                                     # This will be parsed as MessageEvent with is_thought=True
                                     google_parts.append(types.Part(text=thinking, thought=True))
@@ -410,7 +431,7 @@ Requirements:
                                 tool_input = getattr(block, 'input', {})
 
                                 logger.info(
-                                    f"[ToolUseBlock] {tool_name} (id: {tool_id}) with args: {list(tool_input.keys())}"
+                                    f"[Claude Code] [ToolUseBlock] {tool_name} (id: {tool_id}) with args: {list(tool_input.keys())}"
                                 )
 
                                 # Store mapping from tool_use_id to tool_name for later matching
@@ -423,7 +444,7 @@ Requirements:
 
                             else:
                                 # Unknown content block type in AssistantMessage
-                                logger.info(f"[AssistantMessage] Unknown ContentBlock type: {block_type} - {block}")
+                                logger.info(f"[Claude Code] [AssistantMessage] Unknown ContentBlock type: {block_type} - {block}")
                                 google_parts.append(types.Part.from_text(text=f"[Unknown block: {block_type}]"))
 
                         # Yield a single Event with all converted Parts from this AssistantMessage
@@ -434,7 +455,7 @@ Requirements:
                         # User message - contains ToolResultBlock (tool execution results) and possibly TextBlock
                         # In Claude Agent SDK, tool results come back as UserMessage with ToolResultBlock
                         content_blocks = getattr(message, 'content', [])
-                        logger.info(f"Received UserMessage with {len(content_blocks)} content blocks")
+                        logger.info(f"[Claude Code] Received UserMessage with {len(content_blocks)} content blocks")
 
                         # Parse content blocks and convert to Google GenAI Parts
                         google_parts = []
@@ -470,19 +491,19 @@ Requirements:
                                     if is_error:
                                         response_data = {'error': combined_text}
                                         logger.info(
-                                            f"[ToolResultBlock] ERROR for {tool_name}: {combined_text[:200]}..."
+                                            f"[Claude Code] [ToolResultBlock] ERROR for {tool_name}: {combined_text[:200]}..."
                                         )
                                     else:
                                         response_data = {'output': combined_text}
                                         logger.info(
-                                            f"[ToolResultBlock] SUCCESS for {tool_name}: {combined_text[:200]}..."
+                                            f"[Claude Code] [ToolResultBlock] SUCCESS for {tool_name}: {combined_text[:200]}..."
                                         )
                                 elif isinstance(content, str):
                                     if is_error:
                                         response_data = {'error': content}
                                     else:
                                         response_data = {'output': content}
-                                    logger.info(f"[ToolResultBlock] {tool_name}: {content[:200]}...")
+                                    logger.info(f"[Claude Code] [ToolResultBlock] {tool_name}: {content[:200]}...")
                                 else:
                                     # Fallback for other content types
                                     content_str = str(content)
@@ -491,7 +512,7 @@ Requirements:
                                     else:
                                         response_data = {'output': content_str}
                                     logger.info(
-                                        f"[ToolResultBlock] {tool_name} (converted to str): {content_str[:200]}..."
+                                        f"[Claude Code] [ToolResultBlock] {tool_name} (converted to str): {content_str[:200]}..."
                                     )
 
                                 # Convert to Google GenAI function response format
@@ -504,12 +525,12 @@ Requirements:
                                 # User can also send text input
                                 text = getattr(block, 'text', '')
                                 if text:
-                                    logger.info(f"[UserMessage.TextBlock] {len(text)} chars")
+                                    logger.info(f"[Claude Code] [UserMessage.TextBlock] {len(text)} chars")
                                     google_parts.append(types.Part.from_text(text=text))
 
                             else:
                                 # Unknown content block type in UserMessage
-                                logger.info(f"[UserMessage] Unknown ContentBlock type: {block_type} - {block}")
+                                logger.info(f"[Claude Code] [UserMessage] Unknown ContentBlock type: {block_type} - {block}")
                                 google_parts.append(types.Part.from_text(text=f"[Unknown user block: {block_type}]"))
 
                         # Yield Event with all converted Parts from this UserMessage
@@ -521,7 +542,7 @@ Requirements:
 
                     elif message_type == "SystemMessage":
                         # System message
-                        logger.info(f"Received SystemMessage: {message}")
+                        logger.info(f"[Claude Code] Received SystemMessage: {message}")
 
                     elif message_type == "ResultMessage":
                         # Final result from Claude - indicates task completion
@@ -560,7 +581,7 @@ Requirements:
 
                     else:
                         # Unknown message type - log it with full details
-                        logger.info(f"[Unknown Message type: {message_type}] - Message: {message}")
+                        logger.info(f"[Claude Code] [Unknown Message type: {message_type}] - Message: {message}")
 
                 # If no result message, create summary from output
                 if self._output_key not in state:
@@ -569,11 +590,42 @@ Requirements:
 
             except asyncio.CancelledError:
                 # If the query was cancelled, just propagate the cancellation
-                logger.info(f"[{self.name}] Agent cancelled during Claude query execution")
+                logger.info(f"[Claude Code] [{self.name}] Agent cancelled during Claude query execution")
                 raise
+            except Exception as e:
+                # Specific handling for JSON buffer overflow errors
+                error_msg = str(e)
+                if "JSON message exceeded maximum buffer" in error_msg:
+                    logger.error(
+                        f"[Claude Code] [{self.name}] Claude SDK buffer overflow - likely tried to read file >1MB. "
+                        "Claude Agent SDK has a 1MB limit on tool response sizes."
+                    )
+                    summary = (
+                        "Error: File too large for Claude SDK buffer (>1MB limit).\n\n"
+                        "Claude attempted to read a large file which exceeded the internal 1MB buffer limit "
+                        "of the Claude Agent SDK subprocess communication channel.\n\n"
+                        "To fix this issue:\n"
+                        "1. Use command-line tools (head, tail, wc, ls -lh) to inspect file sizes and contents\n"
+                        "2. For large CSV/data files, use pandas with nrows parameter to load only portions\n"
+                        "3. Process large files in chunks rather than loading entirely\n"
+                        "4. Use streaming or iterative processing for files over 1MB\n\n"
+                        f"Full error: {error_msg[:500]}"
+                    )
+                    state[self._output_key] = self._truncate_summary(summary)
+                    yield Event(
+                        author=self.name,
+                        content=types.Content(
+                            role="model",
+                            parts=[types.Part.from_text(text=summary)]
+                        ),
+                    )
+                else:
+                    # Re-raise other exceptions for generic handling
+                    raise
 
         except Exception as e:
-            logger.error(f"[{self.name}] Error in Claude Agent: {e}", exc_info=True)
+            # Generic exception handler for all other errors
+            logger.error(f"[Claude Code] [{self.name}] Error in Claude Agent: {e}", exc_info=True)
             state[self._output_key] = self._truncate_summary(f"Error: {str(e)}")
             yield Event(
                 author=self.name,

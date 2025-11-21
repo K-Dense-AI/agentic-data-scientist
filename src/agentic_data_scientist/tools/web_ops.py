@@ -9,10 +9,36 @@ from typing import Optional
 import requests
 
 
+def _truncate_content(content: str, max_content_length: int) -> str:
+    """
+    Truncate content to maximum length and add warning if truncated.
+
+    Parameters
+    ----------
+    content : str
+        The content to potentially truncate
+    max_content_length : int
+        Maximum allowed length in characters
+
+    Returns
+    -------
+    str
+        Original content if under limit, or truncated content with warning message
+    """
+    if len(content) <= max_content_length:
+        return content
+    
+    original_length = len(content)
+    truncated = content[:max_content_length]
+    warning = f"\n\n[Content truncated at {max_content_length:,} characters. Original length: {original_length:,} characters]"
+    return truncated + warning
+
+
 def fetch_url(
     url: str,
     timeout: int = 30,
     user_agent: Optional[str] = None,
+    max_content_length: int = 10000,
 ) -> str:
     """
     Fetch content from a URL using HTTP GET.
@@ -25,6 +51,11 @@ def fetch_url(
         Request timeout in seconds, default 30
     user_agent : str, optional
         Custom User-Agent header, default None (uses requests default)
+    max_content_length : int, optional
+        Maximum content length in characters before truncation, default 10000
+        
+        **WARNING: Do not modify max_content_length unless absolutely necessary.
+        The default 10,000 character limit prevents token overflow.**
 
     Returns
     -------
@@ -37,6 +68,7 @@ def fetch_url(
     - Follows redirects automatically
     - Returns text content with automatic encoding detection
     - Returns error message for failed requests
+    - Content exceeding max_content_length will be truncated with a warning message
 
     Examples
     --------
@@ -70,7 +102,9 @@ def fetch_url(
         # Check for HTTP errors
         response.raise_for_status()
         
-        return response.text
+        # Apply content length truncation
+        content = _truncate_content(response.text, max_content_length)
+        return content
     
     except requests.exceptions.Timeout:
         return f"Error: Request timed out after {timeout} seconds"

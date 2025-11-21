@@ -38,6 +38,12 @@ agentic-data-scientist "Perform differential expression analysis on this RNA-seq
 # Stream responses to see progress in real-time
 agentic-data-scientist "Analyze customer churn patterns" --files customers.csv --stream
 
+# Custom working directory and keep files after completion
+agentic-data-scientist "Generate report" --files data.csv --working-dir ./my_analysis --keep-files
+
+# Custom log file location
+agentic-data-scientist "Analyze data" --files data.csv --log-file ./analysis.log
+
 # Ask questions
 agentic-data-scientist "Explain how gradient boosting works"
 ```
@@ -209,7 +215,7 @@ Each agent in the workflow has a specific responsibility:
 │  └────────────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────────────┤
 │                     Tool Layer                               │
-│  • MCP: filesystem (read-only), fetch, context7             │
+│  • Built-in Tools: Read-only file ops, web fetch            │
 │  • Claude Skills: 380+ scientific databases and packages    │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -228,32 +234,29 @@ GOOGLE_API_KEY=your_key_here
 # Optional: Model configuration
 DEFAULT_MODEL=google/gemini-2.5-pro
 CODING_MODEL=claude-sonnet-4-5-20250929
-
-# Optional: MCP server configuration
-MCP_FILESYSTEM_ROOT=/path/to/your/data
-CONTEXT7_API_KEY=your_context7_key_here
 ```
 
 ### Tools & Skills
 
-**MCP Servers**:
-- **filesystem** (planning/review agents): Read-only file operations (read_file, list_directory, search_files, get_file_info)
-- **fetch** (planning/review agents): Web content fetching and HTTP requests
-- **context7** (coding agent): Library documentation and context retrieval
+**Built-in Tools** (planning/review agents):
+- **File Operations**: Read-only file access within working directory
+  - `read_file`, `read_media_file`, `list_directory`, `directory_tree`, `search_files`, `get_file_info`
+- **Web Operations**: HTTP fetch for retrieving web content
+  - `fetch_url`
 
-**Claude Skills** (used by coding agent):
+**Claude Skills** (coding agent):
 - **380+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
   - Scientific databases: UniProt, PubChem, PDB, KEGG, PubMed, and more
   - Scientific packages: BioPython, RDKit, PyDESeq2, scanpy, and more
-  - Auto-cloned to `.claude/skills/` at agent startup
+  - Auto-cloned to `.claude/skills/` at coding agent startup
 
-See [docs/mcp_configuration.md](docs/mcp_configuration.md) for detailed configuration.
+All tools are sandboxed to the working directory for security.
 
 ## Documentation
 
 - [Getting Started Guide](docs/getting_started.md) - Learn how the workflow operates step by step
 - [API Reference](docs/api_reference.md) - Complete API documentation
-- [MCP Configuration](docs/mcp_configuration.md) - Configure MCP servers and tools
+- [Tools Configuration](docs/tools_configuration.md) - Configure tools and skills
 - [Extending](docs/extending.md) - Customize prompts, agents, and workflows
 
 ## Examples
@@ -344,7 +347,7 @@ agentic-data-scientist/
 │   ├── prompts/        # Prompt templates
 │   │   ├── base/       # Agent role prompts
 │   │   └── domain/     # Domain-specific prompts
-│   ├── mcp/            # MCP integration
+│   ├── tools/          # Built-in tools (file ops, web fetch)
 │   └── cli/            # CLI interface
 ├── tests/              # Test suite
 ├── examples/           # Usage examples
@@ -366,6 +369,39 @@ Contributions are welcome! Please see our contributing guidelines.
 3. Make your changes
 4. Add tests
 5. Submit a pull request
+
+## Technical Notes
+
+### Context Window Management
+
+The framework implements aggressive event compression to manage context window usage during long-running analyses:
+
+#### Event Compression Strategy
+
+- **Automatic Compression**: Events are automatically compressed when count exceeds threshold (default: 30 events)
+- **LLM-based Summarization**: Old events are summarized using LLM before removal to preserve critical context
+- **Aggressive Truncation**: Large text content (>5KB) is truncated to prevent token overflow
+- **Direct Event Queue Manipulation**: Uses direct assignment to `session.events` to ensure changes take effect
+
+#### Key Implementation Details
+
+The compression system addresses a critical issue where events weren't being properly removed from the context:
+
+1. **Direct Assignment**: Instead of using `pop()` operations, we use direct list assignment (`session.events = new_events`) to ensure ADK's session service recognizes the changes
+2. **Truncation of Remaining Events**: After compression, ALL remaining events are truncated to keep context size manageable
+3. **Hard Limit Callback**: A safety mechanism that enforces a maximum event count regardless of compression
+4. **More Aggressive Defaults**: Compression threshold reduced to 30 events with 10-event overlap (vs. previous 40/20)
+
+#### Preventing Token Overflow
+
+The system employs multiple layers of protection:
+
+- **Callback-based compression**: Triggers automatically after each agent turn
+- **Manual compression**: Triggered at key orchestration points (e.g., after implementation loop)
+- **Hard limit trimming**: Emergency fallback that discards old events if count exceeds maximum
+- **Large text truncation**: Prevents individual events from consuming excessive tokens
+
+These mechanisms work together to keep the total context under 1M tokens even during complex multi-stage analyses.
 
 ## License
 

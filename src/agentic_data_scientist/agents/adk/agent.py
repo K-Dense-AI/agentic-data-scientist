@@ -265,12 +265,6 @@ def criteria_checker_callback(callback_context: CallbackContext):
             criteria_text = criteria[idx].get("criteria", "Unknown")
             evidence_text = update["evidence"]
             
-            # Truncate long texts for logging
-            if len(criteria_text) > 80:
-                criteria_text = criteria_text[:80] + "..."
-            if len(evidence_text) > 120:
-                evidence_text = evidence_text[:120] + "..."
-            
             logger.info(f"[CriteriaChecker] Criterion {idx}: {status}")
             logger.info(f"[CriteriaChecker]   └─ Criteria: {criteria_text}")
             logger.info(f"[CriteriaChecker]   └─ Evidence: {evidence_text}")
