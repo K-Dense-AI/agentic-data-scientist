@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = {text = "MIT"}
 authors = [
-    {name = "K-Dense AI", email="contact@k-dense.ai"}
+    {name = "K-Dense", email="contact@k-dense.ai"}
 ]
 keywords = ["ai", "agents", "adk", "claude", "multi-agent", "llm", "data-science"]
 classifiers = [

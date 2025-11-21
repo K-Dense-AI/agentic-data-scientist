@@ -7,7 +7,7 @@
 
 **An Adaptive Multi-Agent Framework for Data Science**
 
-Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
+Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude Agent SDK, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
 
 ## Features
 
@@ -16,6 +16,7 @@ Agentic Data Scientist is an open-source framework that uses a sophisticated mul
 - 🔄 **Continuous Validation**: Tracks progress against success criteria at every step
 - 🎯 **Self-Correcting**: Reviews and adapts the plan based on discoveries during execution
 - 🔌 **MCP Integration**: Tool access via Model Context Protocol servers
+- 🧠 **Claude Scientific Skills Integration**: Access advanced Claude Skills directly within your workflows
 - 📁 **File Handling**: Simple file upload and management
 - 🛠️ **Extensible**: Customize prompts, agents, and workflows
 - 📦 **Easy Installation**: Available via pip and uvx
@@ -246,7 +247,7 @@ Each agent in the workflow has a specific responsibility:
 ├──────────────────────────────────────────────────────────────┤
 │                     Tool Layer                               │
 │  • Built-in Tools: Read-only file ops, web fetch             │
-│  • Claude Skills: 380+ scientific databases and packages     │
+│  • Claude Scientific Skills: 120+ skills                     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -274,8 +275,8 @@ CODING_MODEL=claude-sonnet-4-5-20250929
 - **Web Operations**: HTTP fetch for retrieving web content
   - `fetch_url`
 
-**Claude Skills** (coding agent):
-- **380+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+**Claude Scientific Skills** (coding agent):
+- **120+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
   - Scientific databases: UniProt, PubChem, PDB, KEGG, PubMed, and more
   - Scientific packages: BioPython, RDKit, PyDESeq2, scanpy, and more
   - Auto-cloned to `.claude/skills/` at coding agent startup
@@ -466,9 +467,14 @@ The system employs multiple layers of protection:
 
 These mechanisms work together to keep the total context under 1M tokens even during complex multi-stage analyses.
 
+## K-Dense Web
+
+For users requiring access to substantially more powerful capabilities, **K-Dense Web** is available. Visit [k-dense.ai](https://k-dense.ai) to learn more.
+
 ## Support
 
 - GitHub Issues: [Report bugs or request features](https://github.com/K-Dense-AI/agentic-data-scientist/issues)
+- Join our Slack Community: [K-Dense Community](https://join.slack.com/t/k-densecommunity/shared_invite/zt-3iajtyls1-EwmkwIZk0g_o74311Tkf5g)
 - Documentation: [Full documentation](https://github.com/K-Dense-AI/agentic-data-scientist/blob/main/docs)
 
 ## Acknowledgments
@@ -477,9 +483,14 @@ Built with:
 - [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/)
 - [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Claude Scientific Skills](https://github.com/K-Dense-AI/claude-scientific-skills)
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 Copyright © 2025 K-Dense Inc. ([k-dense.ai](https://k-dense.ai))
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=K-Dense-AI/agentic-data-scientist&type=date&legend=top-left)](https://www.star-history.com/#K-Dense-AI/agentic-data-scientist&type=date&legend=top-left)
