@@ -167,13 +167,7 @@ class DataScientist:
             )
             self.agent = claude_agent
 
-            # Wrap in minimal App for compression only (no caching for claude_code)
-            # Create a minimal wrapper agent
-            wrapper_agent = Agent(
-                name="claude_code_wrapper",
-                description="Wrapper for Claude Code agent",
-            )
-
+            # Create App with compression config (no caching for claude_code)
             compression_config = EventsCompactionConfig(
                 summarizer=None,
                 compaction_interval=3,  # Compress every 3 invocations
@@ -182,7 +176,7 @@ class DataScientist:
 
             self.app = App(
                 name="agentic-data-scientist-claude",
-                root_agent=wrapper_agent,
+                root_agent=claude_agent,
                 events_compaction_config=compression_config,
             )
         else:

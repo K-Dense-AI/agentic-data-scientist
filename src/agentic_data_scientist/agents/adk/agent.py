@@ -30,6 +30,7 @@ from agentic_data_scientist.agents.adk.utils import (
     DEFAULT_MODEL,
     REVIEW_MODEL,
     get_generate_content_config,
+    is_network_disabled,
 )
 from agentic_data_scientist.prompts import load_prompt
 
@@ -475,8 +476,12 @@ def create_agent(
         directory_tree_bound,
         search_files_bound,
         get_file_info_bound,
-        fetch_url,  # No working_dir needed for web fetch
     ]
+
+    # Only add fetch_url if network access is not disabled
+    if not is_network_disabled():
+        tools.append(fetch_url)
+
     logger.info(f"[AgenticDS] Configured {len(tools)} local tools")
 
     # ------------------------- Implementation Loop -------------------------
