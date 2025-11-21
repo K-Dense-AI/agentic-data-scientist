@@ -349,6 +349,7 @@ Requirements:
                 setting_sources=["project", "user", "local"],
                 mcp_servers={
                     "context7": McpHttpServerConfig(
+                        type="http",
                         url="https://mcp.context7.com/mcp",
                     )
                 },
