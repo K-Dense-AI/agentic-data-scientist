@@ -4,29 +4,21 @@ This guide will help you understand and use the Agentic Data Scientist multi-age
 
 ## Installation
 
-### Using pip
-
 ```bash
-pip install agentic-data-scientist
-```
+# Install from PyPI using uv
+uv tool install agentic-data-scientist
 
-### Using uv (Recommended)
-
-```bash
-# Install dependencies
-uv sync
-
-# Or use directly with uvx (no installation needed)
+# Or use with uvx (no installation needed)
 uvx agentic-data-scientist "your query here"
 ```
 
 ## Prerequisites
 
-- Python 3.11 or later
-- Node.js (for MCP servers)
+- Python 3.12 or later
+- Node.js (for Claude Code)
 - API keys:
   - `ANTHROPIC_API_KEY` for Claude (required)
-  - `GOOGLE_API_KEY` for Gemini models (required)
+  - `OPENROUTER_API_KEY` for planning/review models (required)
 
 ## Quick Start
 
@@ -37,27 +29,45 @@ Create a `.env` file in your project root:
 ```bash
 # Required: API keys
 ANTHROPIC_API_KEY=your_anthropic_key_here
-GOOGLE_API_KEY=your_google_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here
 
 # Optional: Model configuration
 DEFAULT_MODEL=google/gemini-2.5-pro
 CODING_MODEL=claude-sonnet-4-5-20250929
-
-# Optional: MCP server configuration
-MCP_FILESYSTEM_ROOT=/path/to/your/data
 ```
+
+Get your API keys:
+- OpenRouter: https://openrouter.ai/keys
+- Anthropic: https://console.anthropic.com/
 
 ### 2. Run your first query
 
+**Important:** You must specify `--mode` to choose your execution strategy.
+
 ```bash
-# Ask a question
-agentic-data-scientist "What is machine learning?"
+# Complex analysis with full workflow
+agentic-data-scientist "Perform differential expression analysis" --mode orchestrated --files data.csv
 
-# Analyze a file
-agentic-data-scientist "Analyze trends in this dataset" --files data.csv
+# Quick scripting task
+agentic-data-scientist "Write a Python script to parse CSV" --mode simple
 
-# Stream to see progress in real-time
-agentic-data-scientist "Perform differential expression analysis" --files data1.csv --files data2.csv --stream
+# Question answering
+agentic-data-scientist "Explain gradient boosting" --mode simple
+```
+
+### 3. Working Directory Options
+
+By default, files are saved to `./agentic_output/` and preserved after completion:
+
+```bash
+# Default behavior (files preserved)
+agentic-data-scientist "Analyze data" --mode orchestrated --files data.csv
+
+# Temporary directory (auto-cleanup)
+agentic-data-scientist "Quick exploration" --mode simple --files data.csv --temp-dir
+
+# Custom location
+agentic-data-scientist "Project analysis" --mode orchestrated --files data.csv --working-dir ./my_project
 ```
 
 ## Understanding the Workflow
@@ -281,47 +291,43 @@ async for event in await ds.run_async("Your query", stream=True):
         print(f"Created {len(event['files_created'])} files")
 ```
 
-## Alternative: Direct Mode
+## Execution Modes
 
-For simple tasks that don't require planning and validation, you can use direct mode:
+### Orchestrated Mode (Recommended)
 
-### When to Use Direct Mode
+Full multi-agent workflow with planning, validation, and adaptive execution.
 
-- **Quick scripting tasks** without complex requirements
-- **Straightforward code generation** where planning overhead isn't needed
-- **Rapid prototyping** where you want immediate results
+**When to use:**
+- Complex data analyses
+- Multi-step workflows  
+- Tasks requiring validation
+- Production analyses
 
-### When NOT to Use Direct Mode
-
-- **Complex analyses** with multiple stages
-- **Tasks requiring validation** and quality assurance
-- **Data science workflows** where planning improves outcomes
-- **Tasks where requirements might evolve** during execution
-
-### Using Direct Mode
-
-```python
-from agentic_data_scientist import DataScientist
-
-# Python API
-with DataScientist(agent_type="claude_code") as ds:
-    result = ds.run("Write a Python function to parse JSON files")
-    print(result.response)
-```
-
+**Example:**
 ```bash
-# CLI
-agentic-data-scientist "Write a script to merge CSV files" --mode simple
+agentic-data-scientist "Perform DEG analysis comparing treatment vs control" \
+  --mode orchestrated \
+  --files treatment.csv --files control.csv
 ```
 
-**Note**: Direct mode bypasses the entire multi-agent workflow - no planning, no reviews, no validation, no adaptive replanning. Use it only when you're confident you don't need these features.
+### Simple Mode
+
+Direct coding without planning overhead.
+
+**When to use:**
+- Quick scripts
+- Code generation
+- Question answering
+- Rapid prototyping
+
+**Example:**
+```bash
+agentic-data-scientist "Write a function to merge CSV files" --mode simple
+```
 
 ## Next Steps
 
-- [API Reference](api_reference.md) - Detailed API documentation
-- [MCP Configuration](mcp_configuration.md) - Configure tools and skills
-- [Extending](extending.md) - Customize prompts and workflows
-- [Examples](../examples/) - More usage examples
+See the `docs/` folder for additional guides on API usage, CLI options, customization, and technical architecture.
 
 ## Troubleshooting
 
@@ -335,10 +341,10 @@ agentic-data-scientist "Write a script to merge CSV files" --mode simple
 - Verify API keys are valid and active
 - Check that keys have sufficient credits
 
-**MCP Server Connection Failures**
+**Node.js Issues**
 - Ensure Node.js is installed: `node --version`
-- Check that MCP servers are accessible
-- Verify `MCP_FILESYSTEM_ROOT` points to a valid directory
+- Required for Claude Code agent
+- Restart terminal after installing Node.js
 
 **Workflow Seems Stuck**
 - Enable streaming to see progress: `--stream` or `stream=True`
@@ -347,6 +353,5 @@ agentic-data-scientist "Write a script to merge CSV files" --mode simple
 
 ### Getting Help
 
-- Check the [full documentation](../README.md)
-- Review [examples](../examples/) for working code
+- Check the full documentation in the `docs/` folder
 - Open an issue on [GitHub](https://github.com/K-Dense-AI/agentic-data-scientist/issues)

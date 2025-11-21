@@ -23,13 +23,14 @@ ds = DataScientist(
   - `"adk"`: **(Recommended)** Full multi-agent workflow with planning, validation, and adaptive execution
   - `"claude_code"`: Direct mode - bypasses workflow for simple scripting tasks
   
-- **mcp_servers** (list, optional): List of MCP servers to enable
+- **mcp_servers** (list, optional): List of MCP servers to enable (currently not used; see tools_configuration.md)
 
 **Note**: The multi-agent ADK workflow (`agent_type="adk"`) is the primary mode and recommended for most use cases. Direct mode is only for simple tasks that don't benefit from planning and validation.
 
-**Model Configuration**: Models are configured via environment variables:
+**Model Configuration**: Models are configured via environment variables and routed through OpenRouter:
   - ADK agents: `DEFAULT_MODEL` (default: `google/gemini-2.5-pro`)
   - Coding agent: `CODING_MODEL` (default: `claude-sonnet-4-5-20250929`)
+  - Models with provider prefixes (e.g., `google/`, `anthropic/`) are automatically routed through OpenRouter
 
 #### Attributes
 
@@ -146,12 +147,13 @@ config = SessionConfig(
 #### Attributes
 
 - **agent_type** (str): "adk" or "claude_code"
-- **mcp_servers** (list, optional): List of MCP servers
+- **mcp_servers** (list, optional): List of MCP servers (currently not used)
 - **max_llm_calls** (int): Maximum LLM calls per session
 - **session_id** (str, optional): Custom session ID
 - **working_dir** (str, optional): Custom working directory
+- **auto_cleanup** (bool): Whether to cleanup working directory after completion
 
-**Note**: Models are configured via environment variables, not in the SessionConfig.
+**Note**: Models are configured via environment variables (OPENROUTER_API_KEY, DEFAULT_MODEL, CODING_MODEL), not in the SessionConfig.
 
 ### `Result`
 
@@ -409,56 +411,25 @@ async def process_workflow_events(ds, query):
             print(f"✓ Created {len(files)} files: {', '.join(files)}")
 ```
 
-## CLI Reference
+## CLI Usage
 
-### Basic Usage
-
-```bash
-agentic-data-scientist [OPTIONS] QUERY
-```
-
-### Options
-
-- **--mode**: Execution mode (default: `orchestrated`)
-  - `orchestrated`: Full multi-agent workflow (default, recommended)
-  - `simple`: Direct mode without planning/validation
-- **--files, -f**: Files to upload (can be specified multiple times)
-- **--stream**: Enable streaming output to see progress
-- **--verbose, -v**: Enable verbose logging
-- **--help**: Show help message
-
-### Examples
-
-```bash
-# Default: full multi-agent workflow
-agentic-data-scientist "Analyze customer churn patterns" --files customers.csv
-
-# Stream to watch progress
-agentic-data-scientist "Perform statistical analysis" --files data.csv --stream
-
-# Multiple files
-agentic-data-scientist "Compare these datasets" --files data1.csv --files data2.csv
-
-# Direct mode (simple tasks only)
-agentic-data-scientist "Write a Python script to parse JSON" --mode simple
-
-# Verbose logging
-agentic-data-scientist "Complex task" --verbose --stream
-```
+For complete CLI documentation including all options, working directory behavior, and extensive examples, see `cli_reference.md`.
 
 ## Environment Variables
 
 ### Required
 
 - **ANTHROPIC_API_KEY**: Anthropic API key for Claude (coding agent)
-- **GOOGLE_API_KEY**: Google API key for Gemini models (planning/review agents)
+- **OPENROUTER_API_KEY**: OpenRouter API key for planning/review agents
 
 ### Optional
 
-- **DEFAULT_MODEL**: Model for planning and review agents (default: `google/gemini-2.5-pro`)
+- **DEFAULT_MODEL**: Model for planning and review agents (default: `google/gemini-2.5-pro`, routed through OpenRouter)
+- **REVIEW_MODEL**: Model for review agents (default: same as DEFAULT_MODEL)
 - **CODING_MODEL**: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
-- **MCP_FILESYSTEM_ROOT**: Root directory for filesystem MCP (default: `/tmp`)
-- **CLAUDE_SCIENTIFIC_SKILLS_URL**: URL for claude-scientific-skills MCP
+- **OPENROUTER_API_BASE**: OpenRouter API base URL (default: `https://openrouter.ai/api/v1`)
+- **OR_SITE_URL**: Site URL for OpenRouter (default: `k-dense.ai`)
+- **OR_APP_NAME**: App name for OpenRouter (default: `Agentic Data Scientist`)
 
 ## Error Handling
 
@@ -520,6 +491,4 @@ with DataScientist() as ds:
 
 ## See Also
 
-- [Getting Started Guide](getting_started.md) - Learn the workflow
-- [MCP Configuration](mcp_configuration.md) - Configure tools
-- [Extending Guide](extending.md) - Customize agents and prompts
+See the `docs/` folder for additional guides on getting started, CLI usage, customization, and technical architecture.

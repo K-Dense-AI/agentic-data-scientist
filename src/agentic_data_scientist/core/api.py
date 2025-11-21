@@ -85,11 +85,11 @@ class DataScientist:
     mcp_servers : List[str], optional
         List of MCP servers to enable
     working_dir : str, optional
-        Working directory for the session. If not provided, a temporary directory
-        will be created in /tmp
+        Working directory for the session. If not provided, defaults to
+        "./agentic_output/" in the current directory
     auto_cleanup : bool, optional
         Whether to automatically cleanup the working directory after completion.
-        Defaults to False if working_dir is provided, True otherwise
+        Defaults to False (files are preserved)
     """
 
     def __init__(
@@ -113,10 +113,12 @@ class DataScientist:
             # Default: don't cleanup user-provided directories
             self.auto_cleanup = auto_cleanup if auto_cleanup is not None else False
         else:
-            self.working_dir = Path(tempfile.mkdtemp(prefix=f"agentic_ds_{self.session_id}_"))
+            # Default to ./agentic_output/ subdirectory in current directory
+            self.working_dir = Path("./agentic_output")
+            self.working_dir.mkdir(parents=True, exist_ok=True)
             self._user_provided_dir = False
-            # Default: cleanup temporary directories
-            self.auto_cleanup = auto_cleanup if auto_cleanup is not None else True
+            # Default: don't cleanup default directory
+            self.auto_cleanup = auto_cleanup if auto_cleanup is not None else False
 
         self.config = SessionConfig(
             agent_type=agent_type,

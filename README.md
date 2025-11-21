@@ -1,5 +1,10 @@
 # Agentic Data Scientist
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/K-Dense-AI/karpathy/pulls)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://badge.fury.io/py/agentic-data-scientist.svg?icon=si%3Apython)](https://badge.fury.io/py/agentic-data-scientist)
+
 **An Adaptive Multi-Agent Framework for Data Science**
 
 Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
@@ -21,68 +26,79 @@ Agentic Data Scientist is an open-source framework that uses a sophisticated mul
 
 ```bash
 # Install from PyPI
-pip install agentic-data-scientist
+uv tool install agentic-data-scientist
 
 # Or use with uvx (no installation needed)
 uvx agentic-data-scientist "your query here"
 ```
 
-### Basic Usage
+### Configuration
 
-#### CLI
+**Required API Keys**
 
+Before using Agentic Data Scientist, you must configure two API keys:
+
+1. **OpenRouter API Key** (required for planning and review agents):
+   ```bash
+   export OPENROUTER_API_KEY="your_key_here"
+   ```
+   Get your key at: https://openrouter.ai/keys
+
+2. **Anthropic API Key** (required for coding agent):
+   ```bash
+   export ANTHROPIC_API_KEY="your_key_here"
+   ```
+   Get your key at: https://console.anthropic.com/
+
+Alternatively, create a `.env` file in your project directory:
 ```bash
-# Analyze data with automatic planning and execution
-agentic-data-scientist "Perform differential expression analysis on this RNA-seq data" --files data.csv
-
-# Stream responses to see progress in real-time
-agentic-data-scientist "Analyze customer churn patterns" --files customers.csv --stream
-
-# Custom working directory and keep files after completion
-agentic-data-scientist "Generate report" --files data.csv --working-dir ./my_analysis --keep-files
-
-# Custom log file location
-agentic-data-scientist "Analyze data" --files data.csv --log-file ./analysis.log
-
-# Ask questions
-agentic-data-scientist "Explain how gradient boosting works"
+OPENROUTER_API_KEY=your_key_here
+ANTHROPIC_API_KEY=your_key_here
 ```
 
-#### Python API
+### Basic Usage
 
-```python
-from agentic_data_scientist import DataScientist
+**Important**: You must specify `--mode` to choose your execution strategy. This ensures you're aware of the complexity and API costs.
 
-# Simple usage
-with DataScientist() as ds:
-    result = ds.run("What is machine learning?")
-    print(result.response)
+**Working Directory**: By default, files are saved to `./agentic_output/` in your current directory and preserved after completion. Use `--temp-dir` for temporary storage with auto-cleanup.
 
-# With file upload and streaming
-async def analyze():
-    async with DataScientist() as ds:
-        async for event in await ds.run_async(
-            "Analyze this dataset and identify key trends",
-            files=[("data.csv", open("data.csv", "rb").read())],
-            stream=True
-        ):
-            if event['type'] == 'message':
-                print(f"[{event['author']}] {event['content']}")
+#### Orchestrated Mode (Full Multi-Agent Workflow)
 
-# Multi-turn conversation
-import asyncio
+```bash
+# Complex analysis with planning, execution, and validation
+agentic-data-scientist "Perform differential expression analysis" --mode orchestrated --files data.csv
 
-async def chat():
-    async with DataScientist() as ds:
-        context = {}
-        
-        # First turn
-        result1 = await ds.run_async("What is Python?", context=context)
-        
-        # Second turn (maintains context)
-        result2 = await ds.run_async("Give me an example", context=context)
+# Multiple files with custom working directory
+agentic-data-scientist "Compare datasets" --mode orchestrated -f data1.csv -f data2.csv --working-dir ./my_analysis
 
-asyncio.run(chat())
+# Directory upload (recursive)
+agentic-data-scientist "Analyze all data" --mode orchestrated --files data_folder/
+```
+
+#### Simple Mode (Direct Coding, No Planning)
+
+```bash
+# Quick coding tasks without planning overhead
+agentic-data-scientist "Write a Python script to parse CSV files" --mode simple
+
+# Question answering
+agentic-data-scientist "Explain how gradient boosting works" --mode simple
+
+# Fast analysis with temporary directory
+agentic-data-scientist "Quick data exploration" --mode simple --files data.csv --temp-dir
+```
+
+#### Additional Options
+
+```bash
+# Custom log file location
+agentic-data-scientist "Analyze data" --mode orchestrated --files data.csv --log-file ./analysis.log
+
+# Verbose logging for debugging
+agentic-data-scientist "Debug issue" --mode simple --files data.csv --verbose
+
+# Keep files (override default preservation)
+agentic-data-scientist "Generate report" --mode orchestrated --files data.csv --keep-files
 ```
 
 ## How It Works
@@ -125,12 +141,12 @@ Agentic Data Scientist uses a multi-phase workflow designed to produce high-qual
         │  │ "What needs to be     │   │ until plan is complete
         │  │  done?"               │   │ and validated
         │  └──────────┬────────────┘   │
-        │             │                 │
+        │             │                │
         │  ┌──────────▼────────────┐   │
         │  │ Plan Reviewer         │   │
         │  │ "Is this complete?"   │───┤
         │  └──────────┬────────────┘   │
-        │             │                 │
+        │             │                │
         │  ┌──────────▼────────────┐   │
         │  │ Plan Parser           │   │
         │  │ Structures into       │   │
@@ -147,19 +163,19 @@ Agentic Data Scientist uses a multi-phase workflow designed to produce high-qual
         │  │ Implements the stage  │   │  Stage-by-stage
         │  │ (uses Claude Code)    │   │  implementation with
         │  └──────────┬────────────┘   │  continuous validation
-        │             │                 │
+        │             │                │
         │  ┌──────────▼────────────┐   │
         │  │ Review Agent          │◄──┤ Iterates until
         │  │ "Was this done        │   │ implementation
         │  │  correctly?"          │───┤ is approved
         │  └──────────┬────────────┘   │
-        │             │                 │
+        │             │                │
         │  ┌──────────▼────────────┐   │
         │  │ Criteria Checker      │   │
         │  │ "What have we         │   │
         │  │  accomplished?"       │   │
         │  └──────────┬────────────┘   │
-        │             │                 │
+        │             │                │
         │  ┌──────────▼────────────┐   │
         │  │ Stage Reflector       │   │
         │  │ "What should we do    │   │
@@ -195,28 +211,28 @@ Each agent in the workflow has a specific responsibility:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│               CLI / Python API                               │
+│                    CLI Interface                             │
 ├──────────────────────────────────────────────────────────────┤
 │          Agentic Data Scientist Core                         │
 │        (Session & Event Management)                          │
 ├──────────────────────────────────────────────────────────────┤
 │               ADK Multi-Agent Workflow                       │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Planning Loop (Plan Maker → Reviewer → Parser)         │ │
-│  └────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Stage Orchestrator                                     │ │
-│  │   ├─> Implementation Loop (Coding → Review)           │ │
-│  │   ├─> Criteria Checker                                │ │
-│  │   └─> Stage Reflector                                 │ │
-│  └────────────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │ Summary Agent                                          │ │
-│  └────────────────────────────────────────────────────────┘ │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Planning Loop (Plan Maker → Reviewer → Parser)         │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Stage Orchestrator                                     │  |
+│  │   ├─> Implementation Loop (Coding → Review)            │  │
+│  │   ├─> Criteria Checker                                 │  │
+│  │   └─> Stage Reflector                                  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ Summary Agent                                          │  │
+│  └────────────────────────────────────────────────────────┘  │
 ├──────────────────────────────────────────────────────────────┤
 │                     Tool Layer                               │
-│  • Built-in Tools: Read-only file ops, web fetch            │
-│  • Claude Skills: 380+ scientific databases and packages    │
+│  • Built-in Tools: Read-only file ops, web fetch             │
+│  • Claude Skills: 380+ scientific databases and packages     │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -261,52 +277,74 @@ All tools are sandboxed to the working directory for security.
 
 ## Examples
 
-The [examples/](examples/) directory contains practical examples:
+### Orchestrated Mode Use Cases
 
-**Basic Usage** (`examples/basic_usage.py`)
-```python
-from agentic_data_scientist import DataScientist
-
-with DataScientist() as ds:
-    result = ds.run("What is machine learning?")
-    print(result.response)
-```
-
-**Streaming** (`examples/streaming_example.py`)
-```python
-async with DataScientist() as ds:
-    async for event in await ds.run_async("Analyze this data", stream=True):
-        if event['type'] == 'message':
-            print(f"[{event['author']}] {event['content']}")
-```
-
-Run examples with:
+**Complex Data Analysis**
 ```bash
-uv run python examples/basic_usage.py
+# Differential expression analysis with multiple files
+agentic-data-scientist "Perform DEG analysis comparing treatment vs control" \
+  --mode orchestrated \
+  --files treatment_data.csv \
+  --files control_data.csv
 ```
 
-See [examples/README.md](examples/README.md) for more information.
-
-## Advanced Usage
-
-### Direct Mode (Without Multi-Agent Orchestration)
-
-For simple scripting tasks that don't require planning and validation, you can use direct mode:
-
-```python
-from agentic_data_scientist import DataScientist
-
-with DataScientist(agent_type="claude_code") as ds:
-    result = ds.run("Write a Python script to parse CSV files")
-    print(result.response)
-```
-
-Or via CLI:
+**Multi-Step Workflows**
 ```bash
-agentic-data-scientist "Write a Python script" --mode simple
+# Complete analysis pipeline with visualization
+agentic-data-scientist "Analyze customer churn, create predictive model, and generate report" \
+  --mode orchestrated \
+  --files customers.csv \
+  --working-dir ./churn_analysis
 ```
 
-**Note**: Direct mode bypasses the planning and validation workflow, making it suitable only for straightforward coding tasks where you don't need adaptive planning or progress validation.
+**Directory Processing**
+```bash
+# Process entire dataset directory
+agentic-data-scientist "Analyze all CSV files and create summary statistics" \
+  --mode orchestrated \
+  --files ./raw_data/
+```
+
+### Simple Mode Use Cases
+
+**Quick Scripts**
+```bash
+# Generate utility scripts
+agentic-data-scientist "Write a Python script to merge CSV files by common column" \
+  --mode simple
+```
+
+**Code Explanation**
+```bash
+# Technical questions
+agentic-data-scientist "Explain the difference between Random Forest and Gradient Boosting" \
+  --mode simple
+```
+
+**Fast Prototypes**
+```bash
+# Quick analysis with temporary workspace
+agentic-data-scientist "Create a basic scatter plot from this data" \
+  --mode simple \
+  --files data.csv \
+  --temp-dir
+```
+
+### Working Directory Examples
+
+```bash
+# Default behavior (./agentic_output/ with file preservation)
+agentic-data-scientist "Analyze data" --mode orchestrated --files data.csv
+
+# Temporary directory (auto-cleanup)
+agentic-data-scientist "Quick test" --mode simple --files data.csv --temp-dir
+
+# Custom location
+agentic-data-scientist "Project analysis" --mode orchestrated --files data.csv --working-dir ./my_project
+
+# Custom location with explicit cleanup
+agentic-data-scientist "Temporary analysis" --mode simple --files data.csv --working-dir ./temp --keep-files=false
+```
 
 ## Development
 
@@ -350,15 +388,14 @@ agentic-data-scientist/
 │   ├── tools/          # Built-in tools (file ops, web fetch)
 │   └── cli/            # CLI interface
 ├── tests/              # Test suite
-├── examples/           # Usage examples
 └── docs/               # Documentation
 ```
 
 ## Requirements
 
-- Python 3.11+
-- Node.js (for MCP servers)
-- API keys for Google AI and Anthropic
+- Python 3.12+
+- Node.js (for Claude Code)
+- API keys for Anthropic and OpenRouter
 
 ## Contributing
 
@@ -403,10 +440,6 @@ The system employs multiple layers of protection:
 
 These mechanisms work together to keep the total context under 1M tokens even during complex multi-stage analyses.
 
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
 ## Support
 
 - GitHub Issues: [Report bugs or request features](https://github.com/K-Dense-AI/agentic-data-scientist/issues)
@@ -419,6 +452,8 @@ Built with:
 - [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 
----
+## License
 
-Made with ❤️ by the K-Dense AI Team
+MIT License - see [LICENSE](LICENSE) for details.
+
+Copyright © 2025 K-Dense Inc. ([k-dense.ai](https://k-dense.ai))

@@ -25,6 +25,7 @@ from agentic_data_scientist.agents.claude_code.templates import (
 
 try:
     from claude_agent_sdk import ClaudeAgentOptions, query
+    from claude_agent_sdk.types import McpHttpServerConfig
 except ImportError:
     # Fallback if claude_agent_sdk is not available
     class ClaudeAgentOptions:
@@ -341,8 +342,12 @@ Requirements:
                 model=self.model,
                 env=env,
                 system_prompt={"type": "preset", "preset": "claude_code", "append": system_instructions},
-                setting_sources=["project"],  # Load Skills from .claude/skills/ and MCP servers from .claude/settings.json
-                # mcp_servers not specified - will be loaded from .claude/settings.json
+                setting_sources=["project", "user", "local"],
+                mcp_servers={
+                    "context7": McpHttpServerConfig(
+                        url="https://mcp.context7.com/mcp",
+                    )
+                }
             )
 
             yield Event(

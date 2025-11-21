@@ -14,7 +14,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-
 dependencies = [
     "google-adk==1.18.0",
     "google-genai>=1.26.0",
@@ -28,6 +27,12 @@ dependencies = [
     "litellm>=1.0.0",
     "requests>=2.32.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/K-Dense-AI/agentic-data-scientist"
+Repository = "https://github.com/K-Dense-AI/agentic-data-scientist"
+Documentation = "https://github.com/K-Dense-AI/agentic-data-scientist/blob/main/docs"
+Issues = "https://github.com/K-Dense-AI/agentic-data-scientist/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -45,7 +50,7 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 exclude = [".git", ".venv", ".mypy_cache", ".ruff_cache", "__pycache__", "build", "dist"]
 
 [tool.ruff.format]

@@ -161,6 +161,8 @@ Then load it:
 financial_prompt = load_prompt("plan_maker", domain="finance")
 ```
 
+**Note**: Models are configured via environment variables (`OPENROUTER_API_KEY`, `DEFAULT_MODEL`) and routed through OpenRouter.
+
 ### Prompt Variables
 
 Prompts can include dynamic variables that are interpolated at runtime:
@@ -187,18 +189,19 @@ from agentic_data_scientist.agents.adk.loop_detection import LoopDetectionAgent
 from agentic_data_scientist.agents.adk.utils import DEFAULT_MODEL, get_generate_content_config
 from agentic_data_scientist.prompts import load_prompt
 
-def create_custom_plan_maker(mcp_toolsets):
+def create_custom_plan_maker(tools):
     """Create a custom plan maker with specialized behavior."""
     
     # Load custom prompt
     custom_instructions = load_prompt("custom_plan_maker", domain="finance")
     
+    # DEFAULT_MODEL is a LiteLLM model instance configured to use OpenRouter
     return LoopDetectionAgent(
         name="custom_plan_maker",
-        model=DEFAULT_MODEL,
+        model=DEFAULT_MODEL,  # Automatically routed through OpenRouter
         description="Custom financial planning agent",
         instruction=custom_instructions,
-        tools=mcp_toolsets,
+        tools=tools,
         output_key="high_level_plan",
         generate_content_config=get_generate_content_config(temperature=0.4),
         # Custom loop detection thresholds
@@ -728,6 +731,21 @@ result2 = await pds.run("What are the key trends?", context)
 await pds.close()
 ```
 
+## Environment Configuration
+
+When extending the system, be aware of these environment variables:
+
+**Required:**
+- `OPENROUTER_API_KEY`: For ADK agents using DEFAULT_MODEL
+- `ANTHROPIC_API_KEY`: For Claude Code agent
+
+**Optional:**
+- `DEFAULT_MODEL`: Model for planning/review (default: `google/gemini-2.5-pro`)
+- `REVIEW_MODEL`: Model for review agents (default: same as DEFAULT_MODEL)
+- `CODING_MODEL`: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
+
+Models with provider prefixes (e.g., `google/`, `anthropic/`) are automatically routed through OpenRouter via LiteLLM.
+
 ## Best Practices
 
 1. **Test Custom Prompts Thoroughly**: Validate prompt changes with diverse queries
@@ -737,11 +755,8 @@ await pds.close()
 5. **Keep Prompts Modular**: Break complex prompts into reusable components
 6. **Version Control Prompts**: Track prompt changes like code
 7. **Monitor Agent Behavior**: Log and analyze agent outputs during development
+8. **Model Configuration**: Use environment variables for model configuration rather than hardcoding
 
 ## See Also
 
-- [Getting Started Guide](getting_started.md) - Understand the workflow
-- [API Reference](api_reference.md) - Complete API documentation
-- [MCP Configuration](mcp_configuration.md) - Configure tools
-- [ADK Documentation](https://google.github.io/adk-docs/) - Google ADK reference
-- [Claude SDK Documentation](https://docs.anthropic.com/) - Claude integration
+See the `docs/` folder for additional guides on getting started, API reference, CLI usage, tools configuration, and technical architecture.

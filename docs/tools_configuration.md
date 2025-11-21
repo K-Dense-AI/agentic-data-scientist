@@ -7,7 +7,7 @@ This guide explains the tools available to Agentic Data Scientist agents and how
 The ADK multi-agent workflow uses local Python function tools to provide file system and web access to agents. Different agents have access to different toolsets:
 
 - **Planning and Review Agents** (ADK): Use local file and web fetch tools for reading files and fetching web content
-- **Coding Agent** (Claude Code): Has access to Context7 MCP for library documentation and 380+ scientific Skills for specialized tasks
+- **Coding Agent** (Claude Code): Has access to Context7 MCP (optional) for library documentation and 380+ scientific Skills (auto-loaded) for specialized tasks
 
 ## Local Tools
 
@@ -182,9 +182,11 @@ with DataScientist() as ds:
 
 The Claude Code agent uses a different toolset configured through `.claude/settings.json`.
 
-### Context7 MCP
+### Context7 MCP (Optional)
 
 Provides documentation and context retrieval capabilities for various libraries and frameworks.
+
+**Status:** Optional - The coding agent works without Context7, using Skills for most documentation needs.
 
 **Available Tools:**
 - `resolve-library-id`: Resolve a package name to a Context7-compatible library ID
@@ -192,7 +194,7 @@ Provides documentation and context retrieval capabilities for various libraries 
 
 **Configuration:**
 
-Context7 is configured via the `.claude/settings.json` file in the project root:
+If you want to enable Context7, configure it via the `.claude/settings.json` file in the project root:
 
 ```json
 {
@@ -211,13 +213,15 @@ Context7 is configured via the `.claude/settings.json` file in the project root:
 **Environment Variable:**
 
 ```bash
-# In .env file
+# In .env file (optional)
 CONTEXT7_API_KEY=your-api-key-here
 ```
 
-### Claude Scientific Skills
+### Claude Scientific Skills (Auto-Loaded)
 
 The coding agent has access to 380+ scientific Skills automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills).
+
+**Status:** Automatic - No configuration needed. Skills are automatically loaded when the coding agent starts.
 
 **Available Skill Categories:**
 
@@ -238,6 +242,7 @@ The coding agent has access to 380+ scientific Skills automatically loaded from 
 1. **Automatic Loading**: Skills are automatically cloned to `.claude/skills/` when the coding agent starts
 2. **Agent Discovery**: The coding agent discovers available Skills at runtime
 3. **Autonomous Usage**: The agent decides which Skills to use based on the task
+4. **No Configuration**: No environment variables or setup required
 
 ## Tool Implementation Details
 
@@ -305,14 +310,17 @@ The `working_dir` parameter is automatically bound using `functools.partial` whe
 
 ## Environment Variables
 
-No environment variables are required for local tools. They work out of the box.
+**Required for the Framework:**
+- `OPENROUTER_API_KEY`: Required for planning/review agents
+- `ANTHROPIC_API_KEY`: Required for coding agent
 
-Optional variables for Claude Code agent:
+**Optional for Tools:**
+- `CONTEXT7_API_KEY`: Optional, only if you want to enable Context7 MCP
 
-```bash
-# Context7 MCP (optional, for documentation retrieval)
-CONTEXT7_API_KEY=your-context7-api-key
-```
+**No Environment Variables Needed For:**
+- Local file operation tools (work out of the box)
+- Web fetch tool (works out of the box)
+- Claude Scientific Skills (auto-loaded)
 
 ## Security Considerations
 
@@ -357,4 +365,20 @@ Web fetch operation exceeded timeout. Solutions:
 - Increase timeout parameter: `fetch_url(url, timeout=60)`
 - Check URL is accessible
 - Verify network connectivity
+
+## Summary
+
+**Built-in Tools (Planning/Review Agents):**
+- File operations: Read-only, sandboxed to working directory
+- Web operations: HTTP fetch with timeout protection
+- No configuration needed
+
+**Claude Code Tools (Coding Agent):**
+- Context7 MCP: Optional, for library documentation
+- Scientific Skills: Auto-loaded, 380+ skills for scientific computing
+- No configuration needed for Skills
+
+**Environment Variables:**
+- Required: `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`
+- Optional: `CONTEXT7_API_KEY` (only if using Context7)
 
