@@ -1,7 +1,7 @@
 # Agentic Data Scientist
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/K-Dense-AI/karpathy/pulls)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/K-Dense-AI/agentic-data-scientist/pulls)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/agentic-data-scientist.svg?icon=si%3Apython)](https://badge.fury.io/py/agentic-data-scientist)
 
@@ -450,19 +450,10 @@ The framework implements aggressive event compression to manage context window u
 
 #### Event Compression Strategy
 
-- **Automatic Compression**: Events are automatically compressed when count exceeds threshold (default: 30 events)
+- **Automatic Compression**: Events are automatically compressed when count exceeds threshold (default: 40 events)
 - **LLM-based Summarization**: Old events are summarized using LLM before removal to preserve critical context
-- **Aggressive Truncation**: Large text content (>5KB) is truncated to prevent token overflow
+- **Aggressive Truncation**: Large text content (>10KB) is truncated to prevent token overflow
 - **Direct Event Queue Manipulation**: Uses direct assignment to `session.events` to ensure changes take effect
-
-#### Key Implementation Details
-
-The compression system addresses a critical issue where events weren't being properly removed from the context:
-
-1. **Direct Assignment**: Instead of using `pop()` operations, we use direct list assignment (`session.events = new_events`) to ensure ADK's session service recognizes the changes
-2. **Truncation of Remaining Events**: After compression, ALL remaining events are truncated to keep context size manageable
-3. **Hard Limit Callback**: A safety mechanism that enforces a maximum event count regardless of compression
-4. **More Aggressive Defaults**: Compression threshold reduced to 30 events with 10-event overlap (vs. previous 40/20)
 
 #### Preventing Token Overflow
 
