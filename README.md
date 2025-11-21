@@ -22,6 +22,20 @@ Agentic Data Scientist is an open-source framework that uses a sophisticated mul
 
 ## Quick Start
 
+### Prerequisites
+
+Before using Agentic Data Scientist, you must have:
+
+1. **Claude Code CLI** installed
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   ```
+   Or visit [Claude Code Quickstart](https://code.claude.com/docs/en/quickstart)
+
+2. **Required API Keys** configured (see Configuration section below)
+   - OPENROUTER_API_KEY (for planning and review agents)
+   - ANTHROPIC_API_KEY (for coding agent)
+
 ### Installation
 
 ```bash
@@ -29,14 +43,14 @@ Agentic Data Scientist is an open-source framework that uses a sophisticated mul
 uv tool install agentic-data-scientist
 
 # Or use with uvx (no installation needed)
-uvx agentic-data-scientist "your query here"
+uvx agentic-data-scientist --mode simple "your query here"
 ```
 
 ### Configuration
 
-**Required API Keys**
+**API Keys**
 
-Before using Agentic Data Scientist, you must configure two API keys:
+You must configure two API keys:
 
 1. **OpenRouter API Key** (required for planning and review agents):
    ```bash
