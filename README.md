@@ -413,13 +413,34 @@ agentic-data-scientist/
 
 ## Contributing
 
-Contributions are welcome! Please see our contributing guidelines.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+```bash
+# Fork and clone, then:
+uv sync --extra dev
+# Make changes, add tests
+uv run pytest tests/ -v
+# Submit PR
+```
+
+## Release Process
+
+For maintainers:
+
+1. **Create and push tag:**
+   ```bash
+   ./scripts/release.sh 0.2.0
+   ```
+
+2. **Create GitHub release:**
+   - Go to https://github.com/K-Dense-AI/agentic-data-scientist/releases/new?tag=v0.2.0
+   - Click "Generate release notes" for automatic changelog
+   - Publish release
+   - Package automatically publishes to PyPI
+
+**One-time PyPI Setup:** Configure [trusted publishing](https://docs.pypi.org/trusted-publishers/) on PyPI with repo `K-Dense-AI/agentic-data-scientist` and workflow `pypi-publish.yml`.
+
+Use conventional commits (`feat:`, `fix:`, `docs:`, etc.) for clean changelogs.
 
 ## Technical Notes
 
