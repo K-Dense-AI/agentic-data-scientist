@@ -16,6 +16,7 @@ from google.adk.agents import Agent, InvocationContext
 from google.adk.events import Event
 from google.genai import types
 
+from agentic_data_scientist.agents.adk.utils import is_network_disabled
 from agentic_data_scientist.agents.claude_code.templates import (
     get_claude_context,
     get_claude_instructions,
@@ -347,6 +348,7 @@ Requirements:
                 env=env,
                 system_prompt={"type": "preset", "preset": "claude_code", "append": system_instructions},
                 setting_sources=["project", "user", "local"],
+                disallowed_tools=["WebFetch", "WebSearch"] if is_network_disabled() else None,
                 mcp_servers={
                     "context7": McpHttpServerConfig(
                         type="http",

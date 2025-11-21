@@ -71,6 +71,20 @@ OPENROUTER_API_KEY=your_key_here
 ANTHROPIC_API_KEY=your_key_here
 ```
 
+**Network Access Control** (Optional)
+
+By default, agents have access to network tools (web search and URL fetching). To disable network access:
+
+```bash
+export DISABLE_NETWORK_ACCESS=true
+```
+
+This disables:
+- `fetch_url` tool for ADK agents
+- `WebFetch` and `WebSearch` tools for Claude Code agent
+
+Network access is enabled by default. Set to "true" or "1" to disable.
+
 ### Basic Usage
 
 **Important**: You must specify `--mode` to choose your execution strategy. This ensures you're aware of the complexity and API costs.

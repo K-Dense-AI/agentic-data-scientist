@@ -46,6 +46,7 @@ __all__ = [
     'OPENROUTER_API_BASE',
     'get_generate_content_config',
     'exit_loop_simple',
+    'is_network_disabled',
 ]
 
 # Set up LiteLLM environment for OpenRouter
@@ -76,6 +77,22 @@ REVIEW_MODEL = LiteLlm(
 
 # Language requirement (empty for English-only models)
 LANGUAGE_REQUIREMENT = ""
+
+
+def is_network_disabled() -> bool:
+    """
+    Check if network access is disabled via environment variable.
+
+    Network access is enabled by default. Set DISABLE_NETWORK_ACCESS
+    to "true" or "1" to disable network tools.
+
+    Returns
+    -------
+    bool
+        True if network access should be disabled, False otherwise
+    """
+    disable_network = os.getenv("DISABLE_NETWORK_ACCESS", "").lower()
+    return disable_network in ("true", "1")
 
 
 # DEPRECATED: Use review_confirmation agents instead
