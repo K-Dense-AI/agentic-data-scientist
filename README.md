@@ -5,6 +5,10 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/agentic-data-scientist.svg?icon=si%3Apython)](https://badge.fury.io/py/agentic-data-scientist)
 
+## K-Dense Web
+
+For users requiring access to substantially more powerful capabilities, **K-Dense Web** is available. Visit [k-dense.ai](https://k-dense.ai) to learn more.
+
 **An Adaptive Multi-Agent Framework for Data Science**
 
 Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude Agent SDK, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
@@ -480,10 +484,6 @@ The system employs multiple layers of protection:
 - **Large text truncation**: Prevents individual events from consuming excessive tokens
 
 These mechanisms work together to keep the total context under 1M tokens even during complex multi-stage analyses.
-
-## K-Dense Web
-
-For users requiring access to substantially more powerful capabilities, **K-Dense Web** is available. Visit [k-dense.ai](https://k-dense.ai) to learn more.
 
 ## Support
 
