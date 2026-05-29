@@ -125,6 +125,14 @@ class TestCompletedEvent:
         assert event.total_events == 10
         assert event.files_count == 2
         assert len(event.files_created) == 2
+        # Defaults to "completed" when not specified
+        assert event.status == "completed"
+
+    def test_completed_event_with_status(self):
+        """Test CompletedEvent carries a non-default run status."""
+        event = CompletedEvent(session_id="s", status="incomplete", timestamp="12:34:56.789")
+        assert event.status == "incomplete"
+        assert event_to_dict(event)["status"] == "incomplete"
 
 
 class TestEventToDict:

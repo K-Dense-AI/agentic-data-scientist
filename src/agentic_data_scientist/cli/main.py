@@ -270,12 +270,29 @@ def main(
     # Run query
     try:
         result = core.run(query, files=file_list)
-        if result.status == "completed":
+        if result.status != "error":
             click.echo("\n" + "=" * 60)
             click.echo("RESPONSE:")
             click.echo("=" * 60)
             click.echo(result.response)
             click.echo("\n" + "=" * 60)
+
+            # Surface the truthful run status so success isn't assumed.
+            if result.status == "completed":
+                click.echo("\nStatus: completed (all success criteria met)")
+            elif result.status == "completed_with_warnings":
+                click.echo(
+                    "\n⚠️  Status: completed with warnings - all success criteria were met, but some "
+                    "stages did not pass review. See the report above for details."
+                )
+            elif result.status == "incomplete":
+                click.echo(
+                    "\n⚠️  Status: incomplete - not all success criteria were met. "
+                    "See the report above for what was accomplished and what remains."
+                )
+            else:
+                click.echo(f"\nStatus: {result.status}")
+
             if result.files_created:
                 click.echo(f"\nFiles created ({len(result.files_created)}):")
                 for file in result.files_created:

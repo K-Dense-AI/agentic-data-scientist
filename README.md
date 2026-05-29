@@ -234,7 +234,7 @@ Each agent in the workflow has a specific responsibility:
 - **Plan Reviewer**: "Is this plan complete?" - Validates that plans address all requirements before execution begins
 - **Plan Parser**: Converts natural language plans into structured, executable stages with trackable success criteria
 - **Stage Orchestrator**: Manages the execution cycle - runs stages one at a time, validates progress, and adapts as needed
-- **Coding Agent**: Does the actual implementation work (powered by Claude Code SDK with access to 380+ scientific Skills)
+- **Coding Agent**: Does the actual implementation work (powered by Claude Code SDK with access to 143 scientific Skills)
 - **Review Agent**: "Was this done correctly?" - Validates implementations against requirements before proceeding
 - **Criteria Checker**: "What have we accomplished?" - Objectively tracks progress against success criteria after each stage
 - **Stage Reflector**: "What should we do next?" - Analyzes progress and adapts remaining stages based on what's been learned
@@ -265,7 +265,7 @@ Each agent in the workflow has a specific responsibility:
 ├──────────────────────────────────────────────────────────────┤
 │                     Tool Layer                               │
 │  • Built-in Tools: Read-only file ops, web fetch             │
-│  • Claude Scientific Skills: 120+ skills                     │
+│  • Claude Scientific Skills: 143 skills                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -294,7 +294,7 @@ CODING_MODEL=claude-sonnet-4-5-20250929
   - `fetch_url`
 
 **Claude Scientific Skills** (coding agent):
-- **120+ Scientific Skills** automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+- **143 Scientific Skills** automatically loaded from [scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills)
   - Scientific databases: UniProt, PubChem, PDB, KEGG, PubMed, and more
   - Scientific packages: BioPython, RDKit, PyDESeq2, scanpy, and more
   - Auto-cloned to `.claude/skills/` at coding agent startup
@@ -497,7 +497,7 @@ Built with:
 - [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/)
 - [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
-- [Claude Scientific Skills](https://github.com/K-Dense-AI/claude-scientific-skills)
+- [Scientific Agent Skills](https://github.com/K-Dense-AI/scientific-agent-skills)
 
 ## License
 

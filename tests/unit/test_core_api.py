@@ -147,3 +147,46 @@ class TestDataScientist:
             assert ds.working_dir.exists()
 
         # Cleanup should have been called
+
+
+class TestResolveRunStatus:
+    """Test that Result status is derived from the orchestrator's recorded run_status."""
+
+    @pytest.mark.asyncio
+    async def test_resolves_status_from_state(self, tmp_path):
+        """run_status persisted to session state should drive the resolved status."""
+        from google.adk.events import Event, EventActions
+
+        ds = DataScientist(agent_type="claude_code", working_dir=str(tmp_path), auto_cleanup=True)
+        try:
+            await ds._setup_agent()
+
+            async def _persist_status(status):
+                # Persist via state_delta exactly like the orchestrator does, so a
+                # fresh get_session sees it (InMemorySessionService returns copies).
+                session = await ds.session_service.get_session(
+                    app_name=ds.app.name, user_id="default_user", session_id=ds.session_id
+                )
+                await ds.session_service.append_event(
+                    session,
+                    Event(author="stage_orchestrator", actions=EventActions(state_delta={"run_status": status})),
+                )
+
+            await _persist_status("incomplete")
+            assert await ds._resolve_run_status() == "incomplete"
+
+            await _persist_status("completed_with_warnings")
+            assert await ds._resolve_run_status() == "completed_with_warnings"
+        finally:
+            ds.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_defaults_when_status_absent(self, tmp_path):
+        """Without run_status (e.g. simple mode), the default is returned."""
+        ds = DataScientist(agent_type="claude_code", working_dir=str(tmp_path), auto_cleanup=True)
+        try:
+            await ds._setup_agent()
+            assert await ds._resolve_run_status() == "completed"
+            assert await ds._resolve_run_status(default="custom") == "custom"
+        finally:
+            ds.cleanup()

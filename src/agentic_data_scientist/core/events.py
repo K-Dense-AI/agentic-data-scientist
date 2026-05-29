@@ -94,6 +94,7 @@ class CompletedEvent(BaseEvent):
 
     type: Literal["completed"] = "completed"
     session_id: str = ""
+    status: str = "completed"
     duration: float = 0.0
     total_events: int = 0
     files_created: List[str] = field(default_factory=list)

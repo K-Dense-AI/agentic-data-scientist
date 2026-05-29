@@ -219,7 +219,7 @@ CONTEXT7_API_KEY=your-api-key-here
 
 ### Claude Scientific Skills (Auto-Loaded)
 
-The coding agent has access to 380+ scientific Skills automatically loaded from [claude-scientific-skills](https://github.com/K-Dense-AI/claude-scientific-skills).
+The coding agent has access to 380+ scientific Skills automatically loaded from [scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills).
 
 **Status:** Automatic - No configuration needed. Skills are automatically loaded when the coding agent starts.
 

@@ -469,9 +469,11 @@ class DataScientist:
                             relative_path = file_path.relative_to(self.working_dir)
                             files_created.append(str(relative_path))
 
-            # Final completed event
+            # Final completed event (status reflects the orchestrator's recorded outcome)
+            run_status = await self._resolve_run_status()
             completed_event = CompletedEvent(
                 session_id=self.session_id,
+                status=run_status,
                 duration=duration,
                 total_events=message_event_number,
                 files_created=files_created,
@@ -484,6 +486,39 @@ class DataScientist:
             logger.error(f"Error in stream: {e}", exc_info=True)
             error_event = ErrorEvent(content=str(e), timestamp=datetime.now().strftime("%H:%M:%S.%f")[:-3])
             yield event_to_dict(error_event)
+
+    async def _resolve_run_status(self, default: str = "completed") -> str:
+        """
+        Read the terminal run status the orchestrator recorded in session state.
+
+        The orchestrated (ADK) workflow writes ``run_status`` to reflect the actual
+        outcome: ``completed`` (all criteria met and stages approved),
+        ``completed_with_warnings`` (criteria met but some stages were not approved by
+        review), or ``incomplete`` (criteria unmet). Simple (claude_code) mode does not
+        set this key, so the ``default`` is returned in that case.
+
+        Parameters
+        ----------
+        default : str
+            Status to return when no ``run_status`` is present in state.
+
+        Returns
+        -------
+        str
+            The resolved run status.
+        """
+        try:
+            app_name = self.app.name if self.app else "agentic_data_scientist"
+            session = await self.session_service.get_session(
+                app_name=app_name, user_id="default_user", session_id=self.session_id
+            )
+            if session is not None:
+                status = session.state.get("run_status")
+                if status:
+                    return status
+        except Exception as e:
+            logger.warning(f"Could not resolve run status from session state: {e}")
+        return default
 
     async def _collect_responses(self, prompt: str, start_time: datetime) -> Result:
         """Collect all responses and return a complete result."""
@@ -530,9 +565,13 @@ class DataScientist:
                             relative_path = file_path.relative_to(self.working_dir)
                             files_created.append(str(relative_path))
 
+            # Derive status from the orchestrator's recorded outcome rather than
+            # always reporting success.
+            run_status = await self._resolve_run_status()
+
             return Result(
                 session_id=self.session_id,
-                status="completed",
+                status=run_status,
                 response="\n".join(responses),
                 files_created=files_created,
                 duration=duration,

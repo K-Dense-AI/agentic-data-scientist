@@ -10,7 +10,7 @@ import logging
 from typing import Any, AsyncGenerator, Dict, List
 
 from google.adk.agents import BaseAgent, InvocationContext
-from google.adk.events import Event
+from google.adk.events import Event, EventActions
 from google.genai import types
 from pydantic import PrivateAttr
 
@@ -108,6 +108,100 @@ class StageOrchestratorAgent(BaseAgent):
         """Get the stage reflector agent."""
         return self._stage_reflector
 
+    def _apply_terminal_status(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compute the terminal run status from the current state and persist it.
+
+        The status reflects what actually happened rather than always reporting
+        success:
+
+        - ``completed``: every success criterion was met and every attempted
+          stage was approved by review.
+        - ``completed_with_warnings``: every success criterion was met, but at
+          least one stage finished without explicit review approval.
+        - ``incomplete``: at least one success criterion was not met.
+
+        Writes ``run_status`` plus human-readable ``unmet_criteria_summary`` and
+        ``unapproved_stages_summary`` keys to state so downstream agents (the
+        summary agent) and the API layer can surface them.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            The mutable session state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            ``{"run_status": str, "unmet": List[Dict], "unapproved": List[Dict]}``
+        """
+        criteria: List[Dict] = state.get("high_level_success_criteria", []) or []
+        stages: List[Dict] = state.get("high_level_stages", []) or []
+
+        unmet = [c for c in criteria if not c.get("met", False)]
+        # Only stages that were actually attempted carry an "approved" flag.
+        attempted = [s for s in stages if "approved" in s]
+        unapproved = [s for s in attempted if not s.get("approved", False)]
+
+        all_criteria_met = bool(criteria) and not unmet
+        if all_criteria_met and not unapproved:
+            run_status = "completed"
+        elif all_criteria_met and unapproved:
+            run_status = "completed_with_warnings"
+        else:
+            run_status = "incomplete"
+
+        state["run_status"] = run_status
+        state["unmet_criteria_summary"] = (
+            "\n".join(f"  - Criterion {c.get('index', '?')}: {c.get('criteria', 'Unknown criterion')}" for c in unmet)
+            if unmet
+            else "None - all success criteria were met."
+        )
+        state["unapproved_stages_summary"] = (
+            "\n".join(f"  - Stage {s.get('index', '?')}: {s.get('title', 'Unknown')}" for s in unapproved)
+            if unapproved
+            else "None - all attempted stages were approved by review."
+        )
+
+        logger.info(
+            f"[StageOrchestrator] Terminal run status: {run_status} "
+            f"({len(unmet)} unmet criteria, {len(unapproved)} unapproved stages)"
+        )
+        return {"run_status": run_status, "unmet": unmet, "unapproved": unapproved}
+
+    @staticmethod
+    def _format_status_block(info: Dict[str, Any]) -> str:
+        """Build a user-facing text block listing unmet criteria and unapproved stages."""
+        lines: List[str] = []
+        unmet = info.get("unmet", [])
+        unapproved = info.get("unapproved", [])
+
+        if unmet:
+            lines.append(f"Unmet success criteria ({len(unmet)}):")
+            lines.extend(f"  - {c.get('criteria', 'Unknown criterion')}" for c in unmet)
+        if unapproved:
+            if lines:
+                lines.append("")
+            lines.append(f"Stages completed without review approval ({len(unapproved)}):")
+            lines.extend(f"  - Stage {s.get('index', '?')}: {s.get('title', 'Unknown')}" for s in unapproved)
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _status_state_delta(state: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build a state_delta of status keys for the terminal event.
+
+        Direct mutations to ``ctx.session.state`` are only visible within the
+        running invocation; persisting the status through ``EventActions.state_delta``
+        ensures the API layer can read it from the session service after the run.
+        """
+        delta: Dict[str, Any] = {}
+        for key in ("run_status", "unmet_criteria_summary", "unapproved_stages_summary"):
+            if key in state:
+                delta[key] = state[key]
+        return delta
+
     async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
         """
         Main orchestration logic.
@@ -147,6 +241,7 @@ class StageOrchestratorAgent(BaseAgent):
         # Validate stages
         if not stages or len(stages) == 0:
             logger.error("[StageOrchestrator] No stages found in state!")
+            state["run_status"] = "incomplete"
             error_event = Event(
                 author=self.name,
                 content=types.Content(
@@ -158,6 +253,7 @@ class StageOrchestratorAgent(BaseAgent):
                         )
                     ],
                 ),
+                actions=EventActions(state_delta=self._status_state_delta(state)),
                 turn_complete=True,
             )
             yield error_event
@@ -169,6 +265,7 @@ class StageOrchestratorAgent(BaseAgent):
             stage = stages[i]
             if not isinstance(stage, dict) or "index" not in stage or "title" not in stage:
                 logger.error(f"[StageOrchestrator] Stages have invalid structure at index {i}!")
+                state["run_status"] = "incomplete"
                 error_event = Event(
                     author=self.name,
                     content=types.Content(
@@ -180,6 +277,7 @@ class StageOrchestratorAgent(BaseAgent):
                             )
                         ],
                     ),
+                    actions=EventActions(state_delta=self._status_state_delta(state)),
                     turn_complete=True,
                 )
                 yield error_event
@@ -188,6 +286,7 @@ class StageOrchestratorAgent(BaseAgent):
         # Validate criteria
         if not criteria or len(criteria) == 0:
             logger.error("[StageOrchestrator] No success criteria found in state!")
+            state["run_status"] = "incomplete"
             error_event = Event(
                 author=self.name,
                 content=types.Content(
@@ -199,6 +298,7 @@ class StageOrchestratorAgent(BaseAgent):
                         )
                     ],
                 ),
+                actions=EventActions(state_delta=self._status_state_delta(state)),
                 turn_complete=True,
             )
             yield error_event
@@ -210,6 +310,7 @@ class StageOrchestratorAgent(BaseAgent):
             criterion = criteria[i]
             if not isinstance(criterion, dict) or "index" not in criterion or "criteria" not in criterion:
                 logger.error(f"[StageOrchestrator] Criteria have invalid structure at index {i}!")
+                state["run_status"] = "incomplete"
                 error_event = Event(
                     author=self.name,
                     content=types.Content(
@@ -221,6 +322,7 @@ class StageOrchestratorAgent(BaseAgent):
                             )
                         ],
                     ),
+                    actions=EventActions(state_delta=self._status_state_delta(state)),
                     turn_complete=True,
                 )
                 yield error_event
@@ -258,20 +360,33 @@ class StageOrchestratorAgent(BaseAgent):
             logger.info(f"[StageOrchestrator] Criteria status: {criteria_met_count}/{len(criteria)} met")
 
             if all(c.get("met", False) for c in criteria):
-                logger.info("[StageOrchestrator] 🎉 All success criteria met! Exiting to summary.")
+                info = self._apply_terminal_status(state)
+                run_status = info["run_status"]
+                logger.info(
+                    f"[StageOrchestrator] 🎉 All success criteria met! Exiting to summary (status={run_status})."
+                )
+
+                status_block = self._format_status_block(info)
+                if run_status == "completed":
+                    header = (
+                        f"\n\n✅ All {len(criteria)} high-level success criteria have been met. "
+                        "Proceeding to final summary generation.\n\n"
+                    )
+                else:
+                    header = (
+                        f"\n\n✅ All {len(criteria)} high-level success criteria have been met, but some stages "
+                        f"completed without explicit review approval (status: {run_status}). "
+                        "Proceeding to final summary generation.\n\n"
+                    )
 
                 # Create completion event
                 completion_event = Event(
                     author=self.name,
                     content=types.Content(
                         role="model",
-                        parts=[
-                            types.Part(
-                                text=f"\n\n✅ All {len(criteria)} high-level success criteria have been met. "
-                                "Proceeding to final summary generation.\n\n"
-                            )
-                        ],
+                        parts=[types.Part(text=header + (status_block + "\n\n" if status_block else ""))],
                     ),
+                    actions=EventActions(state_delta=self._status_state_delta(state)),
                     turn_complete=True,
                 )
                 yield completion_event
@@ -295,9 +410,12 @@ class StageOrchestratorAgent(BaseAgent):
                 remaining_stages = [s for s in stages if not s.get("completed", False)]
 
                 if not remaining_stages:
+                    info = self._apply_terminal_status(state)
                     logger.error(
-                        "[StageOrchestrator] Still no stages after reflection. Exiting despite incomplete criteria."
+                        "[StageOrchestrator] Still no stages after reflection. "
+                        f"Exiting despite incomplete criteria (status={info['run_status']})."
                     )
+                    status_block = self._format_status_block(info)
                     warning_event = Event(
                         author=self.name,
                         content=types.Content(
@@ -305,10 +423,12 @@ class StageOrchestratorAgent(BaseAgent):
                             parts=[
                                 types.Part(
                                     text="\n\n⚠️ No remaining stages to implement, but not all "
-                                    "success criteria are met. Proceeding to summary.\n\n"
+                                    f"success criteria are met (status: {info['run_status']}). "
+                                    "Proceeding to summary.\n\n" + (status_block + "\n\n" if status_block else "")
                                 )
                             ],
                         ),
+                        actions=EventActions(state_delta=self._status_state_delta(state)),
                         turn_complete=True,
                     )
                     yield warning_event
@@ -344,9 +464,11 @@ class StageOrchestratorAgent(BaseAgent):
                 "description": next_stage["description"],
             }
 
-            # Clear previous implementation outputs
+            # Clear previous implementation outputs (including the prior stage's
+            # review-approval decision, so a stale approval can't bleed into this stage).
             state.pop("implementation_summary", None)
             state.pop("review_feedback", None)
+            state.pop("implementation_review_confirmation_decision", None)
 
             # === Run Implementation Loop ===
             logger.info("")
@@ -394,8 +516,30 @@ class StageOrchestratorAgent(BaseAgent):
                 # Skip this stage and continue to next
                 continue
 
-            # Store implementation result (but don't mark as completed yet)
+            # Determine whether the implementation review actually approved this stage.
+            # The implementation_review_confirmation agent writes its decision to
+            # "implementation_review_confirmation_decision" as {"exit": bool, "reason": str}.
+            # exit=True means review approved and the loop exited; a missing decision or
+            # exit=False means the loop exhausted its iterations (or was halted) without approval.
+            decision = state.get("implementation_review_confirmation_decision")
+            stage_approved = isinstance(decision, dict) and decision.get("exit", False) is True
+            approval_reason = decision.get("reason", "") if isinstance(decision, dict) else ""
+            if stage_approved:
+                logger.info(
+                    f"[StageOrchestrator] Stage {stage_idx} implementation approved by review. "
+                    f"Reason: {approval_reason}"
+                )
+            else:
+                logger.warning(
+                    f"[StageOrchestrator] Stage {stage_idx} implementation NOT approved by review "
+                    "(implementation loop exhausted its iterations or was halted). "
+                    f"Reason: {approval_reason or 'no approval recorded'}"
+                )
+
+            # Store implementation result and approval outcome (but don't mark as completed yet)
             next_stage["implementation_result"] = state.get("implementation_summary", "")
+            next_stage["approved"] = stage_approved
+            next_stage["status"] = "approved" if stage_approved else "needs_work"
 
             # Add to completed stages history BEFORE running checker/reflector
             # so they can see the current stage in their prompts
@@ -405,6 +549,7 @@ class StageOrchestratorAgent(BaseAgent):
                     "stage_index": next_stage["index"],
                     "stage_title": next_stage["title"],
                     "implementation_summary": next_stage["implementation_result"],
+                    "approved": stage_approved,
                 }
             )
             state["stage_implementations"] = stage_implementations
@@ -482,7 +627,9 @@ class StageOrchestratorAgent(BaseAgent):
                 # Refresh stages anyway
                 stages = state.get("high_level_stages", [])
 
-            # NOW mark stage as completed (after criteria check and reflection)
+            # Mark the stage's cycle as finished so orchestration advances to the next stage.
+            # NOTE: "completed" means the stage was attempted and its cycle ran to the end, not
+            # that review approved it - see next_stage["approved"] / next_stage["status"].
             next_stage["completed"] = True
 
             # Update stages in state
@@ -494,18 +641,25 @@ class StageOrchestratorAgent(BaseAgent):
             state["current_stage_index"] = stage_idx
 
         # Safety exit if max iterations reached
-        logger.error(f"[StageOrchestrator] Reached maximum iterations ({max_iterations}). Exiting orchestration.")
+        info = self._apply_terminal_status(state)
+        logger.error(
+            f"[StageOrchestrator] Reached maximum iterations ({max_iterations}). "
+            f"Exiting orchestration (status={info['run_status']})."
+        )
+        status_block = self._format_status_block(info)
         timeout_event = Event(
             author=self.name,
             content=types.Content(
                 role="model",
                 parts=[
                     types.Part(
-                        text=f"\n\n⚠️ Reached maximum orchestration iterations ({max_iterations}). "
-                        "Proceeding to summary with current progress.\n\n"
+                        text=f"\n\n⚠️ Reached maximum orchestration iterations ({max_iterations}) "
+                        f"(status: {info['run_status']}). Proceeding to summary with current progress.\n\n"
+                        + (status_block + "\n\n" if status_block else "")
                     )
                 ],
             ),
+            actions=EventActions(state_delta=self._status_state_delta(state)),
             turn_complete=True,
         )
         yield timeout_event

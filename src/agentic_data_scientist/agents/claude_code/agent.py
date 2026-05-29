@@ -45,9 +45,9 @@ logger = logging.getLogger(__name__)
 
 def setup_skills_directory(working_dir: str) -> None:
     """
-    Clone claude-scientific-skills repository and copy skills to .claude/skills/.
+    Clone scientific-agent-skills repository and copy skills to .claude/skills/.
 
-    The repository contains a single 'scientific-skills' directory with all skills.
+    The repository contains a single 'skills' directory with all skills.
 
     Parameters
     ----------
@@ -64,17 +64,17 @@ def setup_skills_directory(working_dir: str) -> None:
 
     # Clone repo to temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
-        repo_url = "https://github.com/K-Dense-AI/claude-scientific-skills.git"
-        tmp_repo = Path(tmpdir) / "claude-scientific-skills"
+        repo_url = "https://github.com/K-Dense-AI/scientific-agent-skills.git"
+        tmp_repo = Path(tmpdir) / "scientific-agent-skills"
 
         try:
-            logger.info(f"[Claude Code] Cloning claude-scientific-skills to {tmp_repo}")
+            logger.info(f"[Claude Code] Cloning scientific-agent-skills to {tmp_repo}")
             subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(tmp_repo)], check=True, capture_output=True, timeout=60
             )
 
-            # Copy scientific-skills directory
-            source_path = tmp_repo / "scientific-skills"
+            # Copy skills directory
+            source_path = tmp_repo / "skills"
             if source_path.exists():
                 # Copy each skill directory
                 for skill_dir in source_path.iterdir():
@@ -84,7 +84,7 @@ def setup_skills_directory(working_dir: str) -> None:
                             shutil.rmtree(dest_path)
                         shutil.copytree(skill_dir, dest_path)
             else:
-                logger.warning(f"[Claude Code] scientific-skills directory not found in {tmp_repo}")
+                logger.warning(f"[Claude Code] skills directory not found in {tmp_repo}")
 
             logger.info(f"[Claude Code] Skills setup complete in {skills_dir}")
 
