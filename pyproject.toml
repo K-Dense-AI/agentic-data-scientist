@@ -15,17 +15,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "google-adk==1.18.0",
-    "google-genai>=1.26.0",
-    "claude-agent-sdk>=0.1.5",
-    "click>=8.1.0",
-    "aiofiles>=24.1.0",
-    "python-dotenv>=1.0.0",
-    "pyyaml>=6.0.0",
-    "jinja2>=3.1.0",
-    "mcp>=1.0.0",
-    "litellm>=1.0.0",
-    "requests>=2.32.5",
+    "google-adk==2.1.0",
+    "google-genai>=1.75.0",
+    "claude-agent-sdk>=0.2.87",
+    "click>=8.4.1",
+    "aiofiles>=25.1.0",
+    "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3",
+    "jinja2>=3.1.6",
+    "mcp>=1.27.1",
+    "litellm>=1.86.2",
+    "requests>=2.34.2",
 ]
 
 [project.urls]
@@ -36,9 +36,9 @@ Issues = "https://github.com/K-Dense-AI/agentic-data-scientist/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.4.1",
-    "pytest-asyncio>=1.1.0",
-    "ruff>=0.13.1",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.15",
 ]
 
 [project.scripts]
