@@ -7,7 +7,7 @@ This guide explains the tools available to Agentic Data Scientist agents and how
 The ADK multi-agent workflow uses local Python function tools to provide file system and web access to agents. Different agents have access to different toolsets:
 
 - **Planning and Review Agents** (ADK): Use local file and web fetch tools for reading files and fetching web content
-- **Coding Agent** (Claude Code): Has access to Context7 MCP (optional) for library documentation and 380+ scientific Skills (auto-loaded) for specialized tasks
+- **Coding Agent** (Claude Code): Has access to the built-in Context7 MCP server for up-to-date library documentation and 143 scientific Skills (auto-loaded) for specialized tasks
 
 ## Local Tools
 
@@ -180,13 +180,13 @@ with DataScientist() as ds:
 
 ## Claude Code Agent Tools
 
-The Claude Code agent uses a different toolset configured through `.claude/settings.json`.
+In addition to the standard Claude Code toolset (file read/write, shell, etc.), the coding agent is configured in code with the Context7 MCP server and the auto-loaded scientific Skills.
 
-### Context7 MCP (Optional)
+### Context7 MCP (Built-in)
 
-Provides documentation and context retrieval capabilities for various libraries and frameworks.
+Provides up-to-date documentation and context retrieval for various libraries and frameworks.
 
-**Status:** Optional - The coding agent works without Context7, using Skills for most documentation needs.
+**Status:** Built-in - The coding agent is automatically configured with the Context7 HTTP MCP server (`https://mcp.context7.com/mcp`). No manual `.claude/settings.json` setup is required.
 
 **Available Tools:**
 - `resolve-library-id`: Resolve a package name to a Context7-compatible library ID
@@ -194,32 +194,30 @@ Provides documentation and context retrieval capabilities for various libraries 
 
 **Configuration:**
 
-If you want to enable Context7, configure it via the `.claude/settings.json` file in the project root:
+Context7 is wired up automatically in `agents/claude_code/agent.py` via the Claude Agent SDK:
 
-```json
-{
-  "mcpServers": {
-    "context7": {
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp"],
-      "env": {
-        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
-      }
-    }
-  }
-}
+```python
+options = ClaudeAgentOptions(
+    # ...
+    mcp_servers={
+        "context7": McpHttpServerConfig(
+            type="http",
+            url="https://mcp.context7.com/mcp",
+        )
+    },
+)
 ```
 
 **Environment Variable:**
 
 ```bash
-# In .env file (optional)
+# In .env file (optional) - for higher rate limits / enhanced access
 CONTEXT7_API_KEY=your-api-key-here
 ```
 
 ### Claude Scientific Skills (Auto-Loaded)
 
-The coding agent has access to 380+ scientific Skills automatically loaded from [scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills).
+The coding agent has access to 143 scientific Skills automatically loaded from [scientific-agent-skills](https://github.com/K-Dense-AI/scientific-agent-skills).
 
 **Status:** Automatic - No configuration needed. Skills are automatically loaded when the coding agent starts.
 
@@ -315,11 +313,12 @@ The `working_dir` parameter is automatically bound using `functools.partial` whe
 - `ANTHROPIC_API_KEY`: Required for coding agent
 
 **Optional for Tools:**
-- `CONTEXT7_API_KEY`: Optional, only if you want to enable Context7 MCP
+- `CONTEXT7_API_KEY`: Optional - Context7 works without it, but a key enables higher rate limits / enhanced access
 
 **No Environment Variables Needed For:**
 - Local file operation tools (work out of the box)
 - Web fetch tool (works out of the box)
+- Context7 MCP (built-in, works without a key)
 - Claude Scientific Skills (auto-loaded)
 
 ## Security Considerations
@@ -374,11 +373,11 @@ Web fetch operation exceeded timeout. Solutions:
 - No configuration needed
 
 **Claude Code Tools (Coding Agent):**
-- Context7 MCP: Optional, for library documentation
-- Scientific Skills: Auto-loaded, 380+ skills for scientific computing
-- No configuration needed for Skills
+- Context7 MCP: Built-in HTTP server, for up-to-date library documentation
+- Scientific Skills: Auto-loaded, 143 skills for scientific computing
+- No configuration needed
 
 **Environment Variables:**
 - Required: `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`
-- Optional: `CONTEXT7_API_KEY` (only if using Context7)
+- Optional: `CONTEXT7_API_KEY` (higher rate limits for the built-in Context7 MCP)
 

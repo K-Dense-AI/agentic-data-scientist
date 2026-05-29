@@ -7,7 +7,6 @@ import pytest
 from agentic_data_scientist.agents.claude_code import ClaudeCodeAgent
 
 
-@pytest.mark.asyncio
 @pytest.mark.integration
 class TestClaudeCodeIntegration:
     """Test Claude Code agent integration."""

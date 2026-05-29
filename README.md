@@ -4,6 +4,9 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/K-Dense-AI/agentic-data-scientist/pulls)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![PyPI version](https://badge.fury.io/py/agentic-data-scientist.svg?icon=si%3Apython)](https://badge.fury.io/py/agentic-data-scientist)
+[![X](https://img.shields.io/badge/Follow_on_X-%40k__dense__ai-000000?logo=x)](https://x.com/k_dense_ai)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-K--Dense_Inc.-0A66C2?logo=linkedin)](https://www.linkedin.com/company/k-dense-inc)
+[![YouTube](https://img.shields.io/badge/YouTube-K--Dense_Inc.-FF0000?logo=youtube)](https://www.youtube.com/@K-Dense-Inc)
 
 ## K-Dense Web
 
@@ -13,13 +16,17 @@ For users requiring access to substantially more powerful capabilities, **K-Dens
 
 Agentic Data Scientist is an open-source framework that uses a sophisticated multi-agent workflow to tackle complex data science tasks. Built on Google's Agent Development Kit (ADK) and Claude Agent SDK, it separates planning from execution, validates work continuously, and adapts its approach based on progress.
 
+> ⭐ **If Agentic Data Scientist saves you time or helps your work move faster, please [star this repository](https://github.com/K-Dense-AI/agentic-data-scientist).** A star helps other data scientists, engineers, and open-source contributors find the project, and gives us a clear reason to keep expanding it for the community.
+
+> **Stay up to date:** Follow K-Dense on [X](https://x.com/k_dense_ai), [LinkedIn](https://www.linkedin.com/company/k-dense-inc), and [YouTube](https://www.youtube.com/@K-Dense-Inc) for new features, release announcements, walkthroughs, and research workflow demos.
+
 ## Features
 
 - 🤖 **Adaptive Multi-Agent Workflow**: Iterative planning, execution, validation, and reflection
 - 📋 **Intelligent Planning**: Creates comprehensive analysis plans before starting work
 - 🔄 **Continuous Validation**: Tracks progress against success criteria at every step
 - 🎯 **Self-Correcting**: Reviews and adapts the plan based on discoveries during execution
-- 🔌 **MCP Integration**: Tool access via Model Context Protocol servers
+- 🔌 **MCP Integration**: Tool access via Model Context Protocol servers (Context7 for live library docs)
 - 🧠 **Claude Scientific Skills Integration**: Access advanced Claude Skills directly within your workflows
 - 📁 **File Handling**: Simple file upload and management
 - 🛠️ **Extensible**: Customize prompts, agents, and workflows
@@ -266,6 +273,7 @@ Each agent in the workflow has a specific responsibility:
 │                     Tool Layer                               │
 │  • Built-in Tools: Read-only file ops, web fetch             │
 │  • Claude Scientific Skills: 143 skills                      │
+│  • MCP Servers: Context7 (library documentation)             │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -277,12 +285,24 @@ Create a `.env` file:
 
 ```bash
 # Required: API keys
-ANTHROPIC_API_KEY=your_key_here
-GOOGLE_API_KEY=your_key_here
+ANTHROPIC_API_KEY=your_key_here       # Claude Agent SDK (coding agent)
+OPENROUTER_API_KEY=your_key_here      # ADK planning and review agents
 
-# Optional: Model configuration
-DEFAULT_MODEL=google/gemini-2.5-pro
-CODING_MODEL=claude-sonnet-4-5-20250929
+# Optional: Model configuration (defaults shown)
+DEFAULT_MODEL=google/gemini-3.5-flash
+REVIEW_MODEL=google/gemini-3.5-flash
+CODING_MODEL=claude-opus-4-8          # Must be an Anthropic model available in Claude Code
+
+# Optional: OpenRouter configuration (defaults shown)
+OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+OR_SITE_URL=k-dense.ai
+OR_APP_NAME=Agentic Data Scientist
+
+# Optional: Context7 API key for enhanced library documentation access
+CONTEXT7_API_KEY=your_key_here
+
+# Optional: Disable network access (web search/fetch)
+DISABLE_NETWORK_ACCESS=true
 ```
 
 ### Tools & Skills
@@ -299,7 +319,10 @@ CODING_MODEL=claude-sonnet-4-5-20250929
   - Scientific packages: BioPython, RDKit, PyDESeq2, scanpy, and more
   - Auto-cloned to `.claude/skills/` at coding agent startup
 
-All tools are sandboxed to the working directory for security.
+**MCP Servers** (coding agent):
+- **Context7**: Up-to-date library and framework documentation is available to the coding agent via the [Context7](https://context7.com/) MCP server (`https://mcp.context7.com/mcp`). Set `CONTEXT7_API_KEY` for higher rate limits.
+
+All built-in tools are sandboxed to the working directory for security.
 
 ## Documentation
 
@@ -407,20 +430,26 @@ uv run ruff check --fix .
 agentic-data-scientist/
 ├── src/agentic_data_scientist/
 │   ├── core/           # Core API and session management
+│   │   ├── api.py                    # DataScientist entry point
+│   │   └── events.py                 # Event types and handling
 │   ├── agents/         # Agent implementations
 │   │   ├── adk/        # ADK multi-agent workflow
 │   │   │   ├── agent.py              # Agent factory
 │   │   │   ├── stage_orchestrator.py # Stage-by-stage execution
 │   │   │   ├── implementation_loop.py# Coding + review loop
 │   │   │   ├── loop_detection.py     # Loop detection agent
-│   │   │   └── review_confirmation.py# Review decision logic
+│   │   │   ├── review_confirmation.py# Review decision logic
+│   │   │   ├── event_compression.py  # Context window management
+│   │   │   └── utils.py              # Model config & shared helpers
 │   │   └── claude_code/# Claude Code integration
+│   │       ├── agent.py              # Claude Agent SDK wrapper
+│   │       └── templates.py          # Prompt/context templates
 │   ├── prompts/        # Prompt templates
 │   │   ├── base/       # Agent role prompts
-│   │   └── domain/     # Domain-specific prompts
+│   │   └── domain/     # Domain-specific prompts (e.g. bioinformatics)
 │   ├── tools/          # Built-in tools (file ops, web fetch)
 │   └── cli/            # CLI interface
-├── tests/              # Test suite
+├── tests/              # Test suite (unit + integration)
 └── docs/               # Documentation
 ```
 
@@ -490,6 +519,7 @@ These mechanisms work together to keep the total context under 1M tokens even du
 - GitHub Issues: [Report bugs or request features](https://github.com/K-Dense-AI/agentic-data-scientist/issues)
 - Join our Slack Community: [K-Dense Community](https://join.slack.com/t/k-densecommunity/shared_invite/zt-3iajtyls1-EwmkwIZk0g_o74311Tkf5g)
 - Documentation: [Full documentation](https://github.com/K-Dense-AI/agentic-data-scientist/blob/main/docs)
+- Updates and demos: Follow us on [X](https://x.com/k_dense_ai), [LinkedIn](https://www.linkedin.com/company/k-dense-inc), and [YouTube](https://www.youtube.com/@K-Dense-Inc) to keep up with new features, tutorials, and releases
 
 ## Acknowledgments
 

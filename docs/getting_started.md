@@ -31,9 +31,10 @@ Create a `.env` file in your project root:
 ANTHROPIC_API_KEY=your_anthropic_key_here
 OPENROUTER_API_KEY=your_openrouter_key_here
 
-# Optional: Model configuration
-DEFAULT_MODEL=google/gemini-2.5-pro
-CODING_MODEL=claude-sonnet-4-5-20250929
+# Optional: Model configuration (defaults shown)
+DEFAULT_MODEL=google/gemini-3.5-flash
+REVIEW_MODEL=google/gemini-3.5-flash
+CODING_MODEL=claude-opus-4-8
 ```
 
 Get your API keys:
@@ -110,7 +111,7 @@ USER QUERY: "Analyze customer churn patterns in this dataset"
 │                                                        │
 │ A. IMPLEMENTATION LOOP (Iterative)                    │
 │    1. Coding Agent implements the stage               │
-│       - Has access to 380+ scientific Skills          │
+│       - Has access to 143 scientific Skills           │
 │       - Can read/write files, run code                │
 │       - Creates scripts, analyses, visualizations     │
 │                                                        │

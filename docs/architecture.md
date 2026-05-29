@@ -45,7 +45,7 @@ Workflow Root (SequentialAgent)
 
 **ClaudeCodeAgent**
 - Wraps Claude Code SDK for implementation work
-- Has access to 380+ scientific Skills
+- Has access to 143 scientific Skills
 - Provides file system and code execution capabilities
 - Sandboxed to working directory for security
 
@@ -139,7 +139,7 @@ The compression system uses LLM-based summarization to preserve critical context
 1. **Threshold Detection**: Monitors event count after each agent turn
 2. **Summary Generation**: When threshold exceeded, LLM summarizes old events
 3. **Event Replacement**: Old events replaced with single summary event
-4. **Truncation**: Remaining events have large text truncated (>5KB)
+4. **Truncation**: Remaining events have large text truncated (>10KB)
 5. **Direct Assignment**: Uses `session.events = new_events` to ensure ADK recognizes changes
 
 #### Key Implementation Details
@@ -166,12 +166,12 @@ Initial implementation used `pop()` operations, but ADK's session service didn't
 
 #### Compression Parameters
 
-- **EVENT_THRESHOLD**: 30 events (when compression triggers)
-- **EVENT_OVERLAP**: 10 events (kept as recent context)
-- **MAX_EVENTS**: 50 events (hard limit for emergency trimming)
-- **TRUNCATE_SIZE**: 5000 characters (max size for event text)
+- **DEFAULT_EVENT_THRESHOLD**: 40 events (when compression triggers)
+- **DEFAULT_OVERLAP_SIZE**: 20 events (kept uncompressed as recent context)
+- **LARGE_TEXT_THRESHOLD**: 10000 characters (text parts larger than this are truncated)
+- **LARGE_TEXT_KEEP**: 1000 characters (kept from each oversized text part)
 
-These aggressive defaults ensure context stays manageable even during complex analyses.
+These aggressive defaults (see `agents/adk/event_compression.py`) ensure context stays manageable even during complex analyses.
 
 ### Preventing Token Overflow
 
@@ -208,7 +208,7 @@ Safety mechanism when compression isn't sufficient.
 #### Large Text Truncation
 
 ```python
-def truncate_event_text(event, max_size=5000):
+def truncate_event_text(event, max_size=10000):
     """Truncate large text content in events."""
     if len(event.text) > max_size:
         event.text = event.text[:max_size] + "... [truncated]"
@@ -418,7 +418,7 @@ class ReviewConfirmationAgent(LoopDetectionAgent):
 **Orchestrated Mode**: $1-10 per analysis (varies by complexity)
 - Multiple LLM calls
 - Planning and review agents (via OpenRouter)
-- Coding agent (Claude Sonnet 4.5)
+- Coding agent (Claude Opus, configurable via `CODING_MODEL`)
 
 **Simple Mode**: $0.10-1 per task
 - Single coding agent call

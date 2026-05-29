@@ -740,9 +740,9 @@ When extending the system, be aware of these environment variables:
 - `ANTHROPIC_API_KEY`: For Claude Code agent
 
 **Optional:**
-- `DEFAULT_MODEL`: Model for planning/review (default: `google/gemini-2.5-pro`)
-- `REVIEW_MODEL`: Model for review agents (default: same as DEFAULT_MODEL)
-- `CODING_MODEL`: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
+- `DEFAULT_MODEL`: Model for planning/review (default: `google/gemini-3.5-flash`)
+- `REVIEW_MODEL`: Model for review agents (default: `google/gemini-3.5-flash`)
+- `CODING_MODEL`: Model for coding agent (default: `claude-opus-4-8`)
 
 Models with provider prefixes (e.g., `google/`, `anthropic/`) are automatically routed through OpenRouter via LiteLLM.
 

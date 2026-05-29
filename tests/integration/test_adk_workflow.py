@@ -3,7 +3,6 @@
 import pytest
 
 
-@pytest.mark.asyncio
 @pytest.mark.integration
 class TestADKWorkflow:
     """Test full ADK workflow integration."""
@@ -45,7 +44,6 @@ class TestADKWorkflow:
             assert hasattr(agent, 'sub_agents')
 
 
-@pytest.mark.asyncio
 @pytest.mark.integration
 class TestImplementationLoop:
     """Test implementation loop integration."""

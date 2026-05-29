@@ -28,8 +28,8 @@ ds = DataScientist(
 **Note**: The multi-agent ADK workflow (`agent_type="adk"`) is the primary mode and recommended for most use cases. Direct mode is only for simple tasks that don't benefit from planning and validation.
 
 **Model Configuration**: Models are configured via environment variables and routed through OpenRouter:
-  - ADK agents: `DEFAULT_MODEL` (default: `google/gemini-2.5-pro`)
-  - Coding agent: `CODING_MODEL` (default: `claude-sonnet-4-5-20250929`)
+  - ADK agents: `DEFAULT_MODEL` (default: `google/gemini-3.5-flash`)
+  - Coding agent: `CODING_MODEL` (default: `claude-opus-4-8`)
   - Models with provider prefixes (e.g., `google/`, `anthropic/`) are automatically routed through OpenRouter
 
 #### Attributes
@@ -424,9 +424,9 @@ For complete CLI documentation including all options, working directory behavior
 
 ### Optional
 
-- **DEFAULT_MODEL**: Model for planning and review agents (default: `google/gemini-2.5-pro`, routed through OpenRouter)
-- **REVIEW_MODEL**: Model for review agents (default: same as DEFAULT_MODEL)
-- **CODING_MODEL**: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
+- **DEFAULT_MODEL**: Model for planning and review agents (default: `google/gemini-3.5-flash`, routed through OpenRouter)
+- **REVIEW_MODEL**: Model for review agents (default: `google/gemini-3.5-flash`)
+- **CODING_MODEL**: Model for coding agent (default: `claude-opus-4-8`)
 - **OPENROUTER_API_BASE**: OpenRouter API base URL (default: `https://openrouter.ai/api/v1`)
 - **OR_SITE_URL**: Site URL for OpenRouter (default: `k-dense.ai`)
 - **OR_APP_NAME**: App name for OpenRouter (default: `Agentic Data Scientist`)

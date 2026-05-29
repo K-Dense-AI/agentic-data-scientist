@@ -348,8 +348,9 @@ The CLI respects these environment variables (set in `.env` file or shell):
 - `ANTHROPIC_API_KEY`: Anthropic API key for coding agent
 
 **Optional:**
-- `DEFAULT_MODEL`: Model for planning/review (default: `google/gemini-2.5-pro`)
-- `CODING_MODEL`: Model for coding agent (default: `claude-sonnet-4-5-20250929`)
+- `DEFAULT_MODEL`: Model for planning/review (default: `google/gemini-3.5-flash`)
+- `REVIEW_MODEL`: Model for review agents (default: `google/gemini-3.5-flash`)
+- `CODING_MODEL`: Model for coding agent (default: `claude-opus-4-8`)
 
 ## Output and Logging
 
