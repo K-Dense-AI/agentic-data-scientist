@@ -534,3 +534,7 @@ Built with:
 MIT License - see [LICENSE](LICENSE) for details.
 
 Copyright © 2025 K-Dense Inc. ([k-dense.ai](https://k-dense.ai))
+
+## Star History
+
+[![Star History Chart](https://star-history.dera.page/svg?repos=K-Dense-AI/agentic-data-scientist&type=date&legend=top-left)](https://star-history.dera.page/#K-Dense-AI/agentic-data-scientist&type=date&legend=top-left)
