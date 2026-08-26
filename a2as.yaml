@@ -1,0 +1,988 @@
+manifest:
+  version: "0.1.3"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: k-dense-ai/agentic-data-scientist
+    source: https://github.com/k-dense-ai/agentic-data-scientist
+    branch: main
+    commit: "3ce58ef0"
+    scope: [src/agentic_data_scientist/agents/adk/agent.py, src/agentic_data_scientist/agents/adk/event_compression.py, src/agentic_data_scientist/agents/adk/implementation_loop.py,
+      src/agentic_data_scientist/agents/adk/loop_detection.py, src/agentic_data_scientist/agents/adk/review_confirmation.py,
+      src/agentic_data_scientist/agents/adk/stage_orchestrator.py, src/agentic_data_scientist/agents/adk/utils.py, src/agentic_data_scientist/agents/claude_code/agent.py,
+      src/agentic_data_scientist/cli/main.py, src/agentic_data_scientist/core/api.py, src/agentic_data_scientist/core/events.py,
+      src/agentic_data_scientist/prompts/__init__.py, src/agentic_data_scientist/tools/file_ops.py]
+  issued:
+    by: A2AS.org
+    at: '2026-02-11T16:30:18Z'
+    url: https://a2as.org/certified/agents/k-dense-ai/agentic-data-scientist
+  signatures:
+    digest: sha256:kwcHHcNbhxNEeT2RPFeOfX2aNHJ2sN4JMP-5fgQFNDo
+    key: ed25519:u7G_qXZ9HW_oAD9jTASVRV84SJPmTSIeeM5wQacPNGw
+    sig: ed25519:Ug717SsvSYU43Ykvh8g0NtYi5qvPc7ZPSA6YhNkXNtXIP_Lg7rokwOub1aLoERjWAm178O5lb05vc83QNWXzDg
+
+agents:
+  agent.create_review_confirmation_agent:
+    type: factory
+    models: [REVIEW_MODEL]
+    params:
+      name: '{prompt_name}_agent'
+      description: Determines whether to exit the review loop based on implementation status.
+      instruction: instruction
+      planner: BuiltInPlanner
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.0"
+      output_schema: REVIEW_CONFIRMATION_OUTPUT_SCHEMA
+      output_key: '{...}_decision'
+      before_agent_callback: before_callback
+      after_agent_callback: after_callback
+      function: create_review_confirmation_agent
+  claude_agent.0:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      working_dir: str(self.working_dir)
+      function: _setup_agent
+      instance: claude_agent
+  claude_agent.1:
+    type: instance
+    models: [claude-sonnet-4-5-20250929]
+    params:
+      class: ClaudeCodeAgent
+      base: Agent
+      name: name
+      description: ''
+      after_agent_callback: after_agent_callback
+      instance: claude_agent
+  coding_agent:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      name: coding_agent
+      description: A coding agent that uses Claude Code SDK to implement plans.
+      working_dir: working_dir
+      output_key: implementation_summary
+      after_agent_callback: coding_compression_callback
+      function: make_implementation_agents
+  high_level_plan_parser:
+    type: instance
+    models: [gemini-2.5-pro]
+    params:
+      name: high_level_plan_parser
+      description: Parses high-level plan into stages and success criteria.
+      instruction: plan_parser_instructions
+      output_schema: PLAN_PARSER_OUTPUT_SCHEMA
+      output_key: parsed_plan_output
+      after_agent_callback: plan_parser_callback
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.0"
+      function: create_agent
+  high_level_planning_loop:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      name: high_level_planning_loop
+      description: Carries out high-level planning through multiple iterations.
+      max_iterations: "10"
+      function: create_agent
+      sub_agents: [plan_maker_agent, plan_reviewer_agent, create_review_confirmation_agent]
+  implementation_loop:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      name: implementation_loop
+      description: Iterative implementation-review-confirmation loop for each stage.
+      max_iterations: "5"
+      function: create_agent
+      sub_agents: [coding_agent, review_agent, review_confirmation]
+  plan_maker_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [read_file_bound, read_media_file_bound, list_directory_bound, directory_tree_bound, search_files_bound, get_file_info_bound]
+    params:
+      name: plan_maker_agent
+      description: Plan maker agent - creates high-level plans for complex tasks.
+      instruction: plan_maker_instructions
+      output_key: high_level_plan
+      planner: BuiltInPlanner
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.6"
+      after_agent_callback: plan_maker_compression
+      function: create_agent
+  plan_reviewer_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [read_file_bound, read_media_file_bound, list_directory_bound, directory_tree_bound, search_files_bound, get_file_info_bound]
+    params:
+      name: plan_reviewer_agent
+      description: Plan reviewer agent - reviews high-level plans for completeness and correctness.
+      instruction: plan_reviewer_instructions
+      output_key: plan_review_feedback
+      planner: BuiltInPlanner
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.3"
+      after_agent_callback: plan_reviewer_compression
+      function: create_agent
+  review_agent:
+    type: instance
+    models: [REVIEW_MODEL]
+    tools: [tools]
+    params:
+      name: review_agent
+      description: Reviews implementation and provides feedback or approval.
+      instruction: review_prompt
+      planner: BuiltInPlanner
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.0"
+      output_key: review_feedback
+      include_contents: none
+      after_agent_callback: review_compression_callback
+      function: make_implementation_agents
+  root_agent:
+    type: instance
+    params:
+      name: agentic_data_scientist_workflow
+      description: Complete Agentic Data Scientist workflow with adaptive stage-wise implementation.
+      function: create_agent
+      sub_agents: [high_level_planning_loop, high_level_plan_parser, stage_orchestrator, summary_agent]
+  stage_orchestrator.0:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      implementation_loop: implementation_loop
+      criteria_checker: success_criteria_checker
+      stage_reflector: stage_reflector
+      name: stage_orchestrator
+      description: Orchestrates stage-by-stage implementation with adaptive planning.
+      function: create_agent
+      instance: stage_orchestrator
+  stage_orchestrator.1:
+    type: instance
+    models: [gemini-2.5-flash]
+    params:
+      class: StageOrchestratorAgent
+      base: BaseAgent
+      name: name
+      description: description
+      instance: stage_orchestrator
+  stage_reflector:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [read_file_bound, read_media_file_bound, list_directory_bound, directory_tree_bound, search_files_bound, get_file_info_bound]
+    params:
+      name: stage_reflector
+      description: Reflects on and adapts remaining implementation stages.
+      instruction: stage_reflector_instructions
+      output_schema: STAGE_REFLECTOR_OUTPUT_SCHEMA
+      output_key: stage_reflector_output
+      after_agent_callback: combined_reflector_callback
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.4"
+      function: create_agent
+  success_criteria_checker:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [read_file_bound, read_media_file_bound, list_directory_bound, directory_tree_bound, search_files_bound, get_file_info_bound]
+    params:
+      name: success_criteria_checker
+      description: Checks which high-level success criteria have been met.
+      instruction: criteria_checker_instructions
+      output_schema: CRITERIA_CHECKER_OUTPUT_SCHEMA
+      output_key: criteria_checker_output
+      after_agent_callback: combined_criteria_callback
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.0"
+      function: create_agent
+  summary_agent:
+    type: instance
+    models: [gemini-2.5-pro]
+    tools: [read_file_bound, read_media_file_bound, list_directory_bound, directory_tree_bound, search_files_bound, get_file_info_bound]
+    params:
+      name: summary_agent
+      description: Summarizes results into a comprehensive pure text report.
+      instruction: summary_agent_instructions
+      planner: BuiltInPlanner
+      generate_content_config:
+        class: get_generate_content_config
+        temperature: "0.3"
+      function: create_agent
+
+models:
+  claude-sonnet-4-5-20250929:
+    type: literal
+    agents: [claude_agent.1]
+  gemini-2.5-flash:
+    type: default
+    agents: [claude_agent.0, coding_agent, implementation_loop, high_level_planning_loop, stage_orchestrator.0, stage_orchestrator.1]
+  gemini-2.5-pro:
+    type: literal
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, high_level_plan_parser, success_criteria_checker, stage_reflector]
+    params:
+      alias: [google/gemini-2.5-pro]
+  REVIEW_MODEL:
+    type: literal
+    agents: [review_agent, agent.create_review_confirmation_agent]
+
+tools:
+  directory_tree_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: Generate a recursive directory tree view.
+  get_file_info_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: Get detailed metadata about a file.
+  list_directory_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: List directory contents with optional size display and sorting.
+  read_file_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: Read file contents with optional head/tail line limits.
+  read_media_file_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: Read binary/media files and return base64 encoded data.
+  search_files_bound:
+    type: function
+    agents: [summary_agent, plan_maker_agent, plan_reviewer_agent, success_criteria_checker, stage_reflector]
+    params:
+      description: Search for files matching a pattern.
+  tools:
+    type: function
+    agents: [review_agent]
+    params:
+      dynamic: "True"
+
+teams:
+  high_level_planning_loop:
+    type: hierarchy
+    agents: [high_level_planning_loop, plan_maker_agent, plan_reviewer_agent, create_review_confirmation_agent]
+  implementation_loop:
+    type: hierarchy
+    agents: [implementation_loop, coding_agent, review_agent, review_confirmation]
+  workflow:
+    type: sequential
+    agents: [workflow, high_level_planning_loop, high_level_plan_parser, stage_orchestrator, summary_agent]
+
+imports:
+  Aclosing: google.adk.utils.context_utils.Aclosing
+  Agent: google.adk.agents.Agent
+  Any: typing.Any
+  App: google.adk.apps.App
+  AsyncGenerator: typing.AsyncGenerator
+  asyncio: asyncio
+  base64: base64
+  BaseAgent: google.adk.agents.BaseAgent
+  BaseModel: pydantic.BaseModel
+  BuiltInPlanner: google.adk.planners.BuiltInPlanner
+  CallbackContext: google.adk.agents.callback_context.CallbackContext
+  ClaudeAgentOptions: claude_agent_sdk.ClaudeAgentOptions
+  ClaudeCodeAgent: agentic_data_scientist.agents.claude_code.ClaudeCodeAgent
+  click: click
+  CompletedEvent: agentic_data_scientist.core.events.CompletedEvent
+  compress_events_manually: agentic_data_scientist.agents.adk.event_compression.compress_events_manually
+  ContextCacheConfig: google.adk.agents.context_cache_config.ContextCacheConfig
+  create_agent: agentic_data_scientist.agents.adk.agent.create_agent
+  create_app: agentic_data_scientist.agents.adk.agent.create_app
+  create_compression_callback: agentic_data_scientist.agents.adk.event_compression.create_compression_callback
+  create_review_confirmation_agent: agentic_data_scientist.agents.adk.review_confirmation.create_review_confirmation_agent
+  dataclass: dataclasses.dataclass
+  DataScientist: agentic_data_scientist.core.api.DataScientist
+  datetime: datetime.datetime
+  DEFAULT_MODEL: agentic_data_scientist.agents.adk.utils.DEFAULT_MODEL
+  DEFAULT_MODEL_NAME: agentic_data_scientist.agents.adk.utils.DEFAULT_MODEL_NAME
+  Dict: typing.Dict
+  directory_tree: agentic_data_scientist.tools.file_ops.directory_tree
+  ErrorEvent: agentic_data_scientist.core.events.ErrorEvent
+  Event: google.adk.events.Event
+  event_to_dict: agentic_data_scientist.core.events.event_to_dict
+  EventActions: google.adk.events.EventActions
+  EventCompaction: google.adk.events.event_actions.EventCompaction
+  EventsCompactionConfig: google.adk.apps.app.EventsCompactionConfig
+  fetch_url: agentic_data_scientist.tools.web_ops.fetch_url
+  Field: pydantic.Field
+  field: dataclasses.field
+  FileInfo: agentic_data_scientist.core.api.FileInfo
+  fnmatch: fnmatch.fnmatch
+  FunctionCallEvent: agentic_data_scientist.core.events.FunctionCallEvent
+  FunctionResponseEvent: agentic_data_scientist.core.events.FunctionResponseEvent
+  genai_types: google.genai.types
+  get_claude_context: agentic_data_scientist.agents.claude_code.templates.get_claude_context
+  get_claude_instructions: agentic_data_scientist.agents.claude_code.templates.get_claude_instructions
+  get_file_info: agentic_data_scientist.tools.file_ops.get_file_info
+  get_generate_content_config: agentic_data_scientist.agents.adk.utils.get_generate_content_config
+  get_minimal_pyproject: agentic_data_scientist.agents.claude_code.templates.get_minimal_pyproject
+  InMemorySessionService: google.adk.sessions.InMemorySessionService
+  InvocationContext: google.adk.agents.InvocationContext
+  is_network_disabled: agentic_data_scientist.agents.adk.utils.is_network_disabled
+  json: json
+  List: typing.List
+  list_directory: agentic_data_scientist.tools.file_ops.list_directory
+  LiteLlm: google.adk.models.lite_llm.LiteLlm
+  litellm: litellm
+  Literal: typing.Literal
+  LlmAgent: google.adk.agents.LlmAgent
+  LlmRequest: google.adk.models.llm_request.LlmRequest
+  load_dotenv: dotenv.load_dotenv
+  load_prompt: agentic_data_scientist.prompts.load_prompt
+  logging: logging
+  LoopAgent: google.adk.agents.LoopAgent
+  LoopDetectionAgent: agentic_data_scientist.agents.adk.loop_detection.LoopDetectionAgent
+  main: agentic_data_scientist.cli.main.main
+  make_implementation_agents: agentic_data_scientist.agents.adk.implementation_loop.make_implementation_agents
+  McpHttpServerConfig: claude_agent_sdk.types.McpHttpServerConfig
+  MessageEvent: agentic_data_scientist.core.events.MessageEvent
+  mimetypes: mimetypes
+  NonEscalatingLoopAgent: agentic_data_scientist.agents.adk.agent.NonEscalatingLoopAgent
+  OPENROUTER_API_BASE: agentic_data_scientist.agents.adk.utils.OPENROUTER_API_BASE
+  OPENROUTER_API_KEY: agentic_data_scientist.agents.adk.utils.OPENROUTER_API_KEY
+  Optional: typing.Optional
+  os: os
+  override: typing_extensions.override
+  Path: pathlib.Path
+  PrivateAttr: pydantic.PrivateAttr
+  query: claude_agent_sdk.query
+  re: re
+  read_file: agentic_data_scientist.tools.file_ops.read_file
+  read_media_file: agentic_data_scientist.tools.file_ops.read_media_file
+  Result: agentic_data_scientist.core.api.Result
+  REVIEW_MODEL: agentic_data_scientist.agents.adk.utils.REVIEW_MODEL
+  Runner: google.adk.runners.Runner
+  search_files: agentic_data_scientist.tools.file_ops.search_files
+  SequentialAgent: google.adk.agents.SequentialAgent
+  SessionConfig: agentic_data_scientist.core.api.SessionConfig
+  setup_working_directory: agentic_data_scientist.agents.claude_code.agent.setup_working_directory
+  shutil: shutil
+  StageOrchestratorAgent: agentic_data_scientist.agents.adk.stage_orchestrator.StageOrchestratorAgent
+  subprocess: subprocess
+  sys: sys
+  tempfile: tempfile
+  ToolContext: google.adk.tools.tool_context.ToolContext
+  Tuple: typing.Tuple
+  types: google.genai.types
+  Union: typing.Union
+  UsageEvent: agentic_data_scientist.core.events.UsageEvent
+  uuid: uuid
+  warnings: warnings
+
+functions:
+  __aenter__:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self]
+  __aexit__:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self, exc_type, exc_val, exc_tb]
+  __enter__:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self]
+  __exit__:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self, exc_type, exc_val, exc_tb]
+  __init__:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [self, implementation_loop, criteria_checker, stage_reflector, name, description]
+  _collect_responses:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self, prompt, start_time]
+    params:
+      returns: Result
+  _compress_session_events:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [session, start_idx, end_idx, summary_text, session_service]
+  _create_clear_decision_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.review_confirmation
+    args: [state_key]
+  _create_event_summary_with_llm:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [events, model_name, session_service, session]
+    params:
+      returns: str
+  _create_exit_loop_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.review_confirmation
+    args: [state_key]
+  _detect_pattern_repetition:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.loop_detection
+    args: [self, text]
+    params:
+      returns: Tuple
+  _extract_text_from_event:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.loop_detection
+    args: [self, event]
+    params:
+      returns: str
+  _format_size:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [size_bytes]
+    params:
+      returns: str
+  _maybe_save_output_to_state:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.loop_detection
+    args: [self, event]
+    params:
+      returns: None
+  _parse_unknown_tool_error:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.loop_detection
+    args: [self, exc]
+    params:
+      returns: Tuple
+  _reset_detection_state:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.loop_detection
+    args: [self]
+  _run_async_impl:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [self, ctx]
+    params:
+      returns: AsyncGenerator
+  _run_live_impl:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [self, ctx]
+    params:
+      returns: AsyncGenerator
+  _setup_agent:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self]
+  _stream_responses:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self, prompt, start_time]
+    params:
+      returns: AsyncGenerator
+  _truncate_content:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [content, max_content_length]
+    params:
+      returns: str
+  _truncate_large_event_texts:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [events]
+    params:
+      returns: None
+  _truncate_summary:
+    type: sync
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [self, summary]
+    params:
+      returns: str
+  _validate_path:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir]
+    params:
+      returns: Path
+  build_tree:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [current_path]
+    params:
+      returns: list[dict]
+  cleanup:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self]
+  clear_decision_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.review_confirmation
+    args: [callback_context]
+  combined_criteria_callback:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [callback_context]
+  combined_reflector_callback:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [callback_context]
+  compress_events_manually:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [ctx, event_threshold, overlap_size, model_name]
+  compression_callback:
+    type: async
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [callback_context]
+  create_agent:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [working_dir, mcp_servers]
+    params:
+      returns: LoopDetectionAgent
+  create_app:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [working_dir, mcp_servers]
+    params:
+      returns: App
+  create_compression_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [event_threshold, overlap_size, model_name]
+  create_event:
+    type: sync
+    module: src.agentic_data_scientist.core.events
+    args: [event_type]
+    params:
+      returns: StreamingEvent
+  create_hard_limit_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [max_events]
+  create_review_confirmation_agent:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.review_confirmation
+    args: [auto_exit_on_completion, prompt_name]
+    params:
+      returns: LoopDetectionAgent
+  criteria_checker:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [self]
+    params:
+      returns: BaseAgent
+  criteria_checker_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [callback_context]
+  directory_tree:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir, exclude_patterns, max_content_length]
+    params:
+      returns: str
+  directory_tree_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [path, exclude_patterns]
+    params:
+      returns: str
+  event_to_dict:
+    type: sync
+    module: src.agentic_data_scientist.core.events
+    args: [event]
+    params:
+      returns: Dict
+  exit_loop_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.review_confirmation
+    args: [callback_context]
+  exit_loop_simple:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.utils
+    args: [tool_context]
+  format_criteria_status:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [criteria, max_length]
+    params:
+      returns: str
+  get_file_info:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir]
+    params:
+      returns: str
+  get_file_info_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [path]
+    params:
+      returns: str
+  get_generate_content_config:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.utils
+    args: [temperature, output_tokens]
+  hard_limit_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.event_compression
+    args: [callback_context]
+  implementation_loop:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [self]
+    params:
+      returns: BaseAgent
+  is_network_disabled:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.utils
+    params:
+      returns: bool
+  list_directory:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir, show_sizes, sort_by, max_content_length]
+    params:
+      returns: str
+  list_directory_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [path, show_sizes, sort_by]
+    params:
+      returns: str
+  load_prompt:
+    type: sync
+    module: src.agentic_data_scientist.prompts
+    args: [name, domain]
+    params:
+      returns: str
+  main:
+    type: sync
+    module: src.agentic_data_scientist.cli.main
+    args: [query, files, mode, working_dir, temp_dir, keep_files, verbose, log_file]
+  make_implementation_agents:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.implementation_loop
+    args: [working_dir, tools]
+  output_key:
+    type: sync
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [self]
+    params:
+      returns: str
+  plan_parser_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [callback_context]
+  prepare_prompt:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self, message, file_info]
+    params:
+      returns: str
+  query:
+    type: async
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [prompt, options]
+  read_file:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir, head, tail, max_content_length]
+    params:
+      returns: str
+  read_file_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [path, head, tail]
+    params:
+      returns: str
+  read_media_file:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [path, working_dir]
+    params:
+      returns: str
+  read_media_file_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [path]
+    params:
+      returns: str
+  run:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self, message, files]
+    params:
+      returns: Result
+  run_async:
+    type: async
+    module: src.agentic_data_scientist.core.api
+    args: [self, message, files, stream, context]
+    params:
+      returns: Union
+  save_files:
+    type: sync
+    module: src.agentic_data_scientist.core.api
+    args: [self, files]
+    params:
+      returns: List[FileInfo]
+  search_files:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [pattern, working_dir, path, exclude_patterns, max_content_length]
+    params:
+      returns: str
+  search_files_bound:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [pattern, path, exclude_patterns]
+    params:
+      returns: str
+  setup_skills_directory:
+    type: sync
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [working_dir]
+    params:
+      returns: None
+  setup_working_directory:
+    type: sync
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [working_dir]
+    params:
+      returns: None
+  should_exclude:
+    type: sync
+    module: src.agentic_data_scientist.tools.file_ops
+    args: [file_path]
+    params:
+      returns: bool
+  stage_reflector:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.stage_orchestrator
+    args: [self]
+    params:
+      returns: BaseAgent
+  stage_reflector_callback:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.agent
+    args: [callback_context]
+  trim_history_to_recent_events:
+    type: sync
+    module: src.agentic_data_scientist.agents.adk.implementation_loop
+    args: [callback_context, max_events]
+  working_dir:
+    type: sync
+    module: src.agentic_data_scientist.agents.claude_code.agent
+    args: [self]
+    params:
+      returns: Optional[str]
+
+variables:
+  CODING_MODEL:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.claude_code.agent, src.agentic_data_scientist.agents.adk.utils]
+  DEFAULT_MODEL:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  DISABLE_NETWORK_ACCESS:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  LITELLM_LOG:
+    type: env
+    params:
+      caller: [os.environ]
+  OPENROUTER_API_BASE:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  OPENROUTER_API_KEY:
+    type: env
+    params:
+      caller: [os.getenv, os.environ]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  OR_APP_NAME:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  OR_SITE_URL:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+  REVIEW_MODEL:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [src.agentic_data_scientist.agents.adk.utils]
+
+files:
+  ./:
+    type: pattern
+    actions: [read]
+    params:
+      patterns: ['*']
+      caller: [_stream_responses, _collect_responses, main]
+  .agentic_ds.log:
+    type: literal
+    actions: [read]
+    params:
+      caller: [main]
+      path: [Path]
+  .claude:
+    type: literal
+    actions: [read]
+    params:
+      caller: [setup_skills_directory]
+      path: [working_path]
+  .md:
+    type: literal
+    actions: [read]
+    params:
+      caller: [load_prompt]
+      path: [prompts_dir]
+  core.working_dir:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  current_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [current_path.iterdir]
+  dest_path:
+    type: variable
+    actions: [delete]
+    params:
+      caller: [shutil.rmtree]
+  dir_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [dir_path.iterdir]
+  file_path:
+    type: variable
+    actions: [write, read]
+    params:
+      caller: [file_path.parent.mkdir, file_path.write_bytes, file_path.read_text]
+  log_file:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  log_path:
+    type: literal
+    actions: [read, write]
+    params:
+      caller: [Path(log_file), log_path.parent.mkdir]
+  path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path, path.rglob]
+  pattern/:
+    type: variable
+    actions: [read]
+    params:
+      links: [pattern]
+      caller: [search_files]
+  prompt_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [prompt_path.read_text]
+  pyproject.toml:
+    type: literal
+    actions: [read]
+    params:
+      caller: [setup_working_directory]
+      path: [working_path]
+  pyproject_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [pyproject_path.write_text]
+  README.md:
+    type: literal
+    actions: [read]
+    params:
+      caller: [setup_working_directory]
+      path: [working_path]
+  readme_path:
+    type: variable
+    actions: [write]
+    params:
+      caller: [readme_path.write_text]
+  search_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [search_path.rglob]
+  skill_dir:
+    type: variable
+    actions: [read]
+    params:
+      caller: [shutil.copytree]
+  skills_dir:
+    type: variable
+    actions: [write]
+    params:
+      caller: [skills_dir.mkdir]
+  source_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [source_path.iterdir, source_path.read_bytes]
+  target_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path.resolve()]
+  tmpdir:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  user_data_dir:
+    type: variable
+    actions: [write]
+    params:
+      caller: [user_data_dir.mkdir]
+  working_dir:
+    type: variable
+    actions: [read, write]
+    params:
+      caller: [Path, working_dir.mkdir]
+  working_path:
+    type: literal
+    actions: [read, write]
+    params:
+      caller: [Path(working_dir), working_path.mkdir]
+
+processes:
+  git:
+    type: shell
+    actions: [exec]
+    args: [[clone, --depth, "1", 'https://github.com/K-Dense-AI/claude-scientific-skills.git', str(tmp_repo)]]
+    params:
+      caller: [subprocess.run]
+      shell: ["False"]
+
+networks:
+  mcp.context7.com:
+    type: api
+    actions: [GET]
+    urls: [/mcp]
+    protocols: [https]
+    ports: ["443"]
+    params:
+      caller: [_run_async_impl]
+      links: [url]
